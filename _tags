@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 978f35383227d62eb0592cf7bea72d01)
+# DO NOT EDIT (digest: cd87858d861796284e86dd7bc8be6897)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -13,6 +13,6 @@
 ".git": not_hygienic
 "_darcs": -traverse
 "_darcs": not_hygienic
-# Library monopretty
-"lib/monopretty.cmxs": use_monopretty
+# Library pretty-monospace
+"lib/pretty-monospace.cmxs": use_pretty-monospace
 # OASIS_STOP

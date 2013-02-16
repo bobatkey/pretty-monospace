@@ -1,5 +1,5 @@
 OASISFormat: 0.3
-Name:        monopretty
+Name:        pretty-monospace
 Version:     0.0.1
 Synopsis:    A pretty printing library for monospaced output
 Authors:     Robert Atkey
@@ -7,14 +7,14 @@ License:     BSD3
 Plugins:     META (0.3)
 BuildTools:  ocamlbuild
 
-Library monopretty
+Library "pretty-monospace"
   Path:       lib
   Modules:    Pretty
   
-Document monopretty
-  Title:                monopretty documentation
+Document "pretty-monospace"
+  Title:                Documentation for pretty-monospace
   Type:                 ocamlbuild (0.3)
   BuildTools+:          ocamldoc
   Install:              true
   XOcamlbuildPath:      lib
-  XOcamlbuildLibraries: monopretty
+  XOcamlbuildLibraries: pretty-monospace

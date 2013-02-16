@@ -1,5 +1,5 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: e48ad76fa3739ecad4a047c8a4af50ed) *)
+(* DO NOT EDIT (digest: 3c532f9c0f2cbe9877b5bcc993426f7b) *)
 module OASISGettext = struct
 (* # 21 "/home/bob/.opam/4.00.1/build/oasis.0.3.0/src/oasis/OASISGettext.ml" *)
 
@@ -477,7 +477,7 @@ end
 open Ocamlbuild_plugin;;
 let package_default =
   {
-     MyOCamlbuildBase.lib_ocaml = [("monopretty", ["lib"])];
+     MyOCamlbuildBase.lib_ocaml = [("pretty-monospace", ["lib"])];
      lib_c = [];
      flags = [];
      includes = [];

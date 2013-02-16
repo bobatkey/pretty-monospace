@@ -41,6 +41,11 @@ val break : document
     (['\n']). *)
 val breakWith : string -> document
 
+(** A break that always renders as a newline plus indentation. Any
+    group that contains a [hardbreak] is forced to render with line
+    breaks. *)
+val hardbreak : document
+
 (** [alignSpc n] renders as [n] spaces if the enclosing group is
     formatted {i with} line breaks, and acts the same as {!empty}
     otherwise. *)
@@ -60,6 +65,9 @@ val (^+^) : document -> document -> document
 
 (** [x ^/^ y] is equivalent to [x ^^ break ^^ y]. *)
 val (^/^) : document -> document -> document
+
+(** [x ^//^ y] is equivalent to [x ^^ hardbreak ^^ y]. *)
+val (^//^) : document -> document -> document
 
 (** [concat sep [x0; x1; ...; xn]] is equivalent to [x0 ^^ sep ^^ x1
     ^^ ... ^^ sep ^^ xn]. *)

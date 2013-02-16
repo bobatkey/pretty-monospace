@@ -37,12 +37,17 @@ module Words = struct
 end
 
 (******************************************************************************)
+let lift2 f x y = match x,y with
+  | None, _ -> None
+  | _, None -> None
+  | Some x, Some y -> Some (f x y)
 
 type document =
     { node       : document_node
-    ; flat_width : int
-    (** pre-computed width of this document were it to be formatted
-        without line breaks *)
+    ; flat_width : int option
+    (** Pre-computed width of this document were it to be formatted
+        without line breaks. [None] if the document contains a hard
+        line break. *)
     }
 
 and document_node =
@@ -51,23 +56,24 @@ and document_node =
   | Text     of string (** some text *)
   | Nest     of int * document (** increment the indentation level *)
   | Break    of string (** the string if the containing group is formatted flat, a newline otherwise *)
+  | HardBreak (** a mandatory line break *)
   | AlignSpc of int (** 'n' spaces if the containing group is formatted with line breaks, nothing otherwise *)
   | Align    of document (** set the indentation level to the current column *)
   | Group    of document (** group a sub-document for deciding whether to break lines or not *)
 
 let empty =
   { node       = Empty
-  ; flat_width = 0
+  ; flat_width = Some 0
   }
 
 let (^^) doc1 doc2 =
   { node       = Append (doc1,doc2)
-  ; flat_width = doc1.flat_width + doc2.flat_width
+  ; flat_width = lift2 (+) doc1.flat_width doc2.flat_width
   }
 
 let text s =
   { node       = Text s
-  ; flat_width = String.length s
+  ; flat_width = Some (String.length s) (* FIXME: UTF8 *)
   }
 
 let nest i doc =
@@ -75,14 +81,19 @@ let nest i doc =
   ; flat_width = doc.flat_width
   }
 
+let hardbreak =
+  { node       = HardBreak
+  ; flat_width = None
+  }
+
 let break =
   { node       = Break " "
-  ; flat_width = 1
+  ; flat_width = Some 1
   }
 
 let breakWith s =
   { node       = Break s
-  ; flat_width = String.length s
+  ; flat_width = Some (String.length s) (* FIXME: UTF8 *)
   }
 
 let group doc =
@@ -92,7 +103,7 @@ let group doc =
 
 let alignSpc n =
   { node       = AlignSpc n
-  ; flat_width = 0
+  ; flat_width = Some 0
   }
 
 let align doc =
@@ -104,6 +115,8 @@ let align doc =
 let (^+^) x y = x ^^ text " " ^^ y
 
 let (^/^) x y = x ^^ break ^^ y
+
+let (^//^) x y = x ^^ hardbreak ^^ y
 
 let concat sep list =
   let i = ref 0 in
@@ -198,45 +211,54 @@ let wordwrap str =
 let format output_text output_newline output_spaces width doc =
   let rec process column = function
     | [] ->
-        ()
+      ()
 
     | (i,m,{node=Empty;_})::z ->
-        process column z
+      process column z
 
     | (i,m,{node=Append (x,y);_})::z ->
-        process column ((i,m,x)::(i,m,y)::z)
+      process column ((i,m,x)::(i,m,y)::z)
 
     | (i,m,{node=Text s;_})::z ->
-        output_text s;
-        process (column + String.length s) z
+      output_text s;
+      process (column + String.length s) z
 
     | (i,m,{node=Align x;_})::z ->
-        process column ((column,m,x)::z)
+      process column ((column,m,x)::z)
 
     | (i,m,{node=Nest (j,x);_})::z ->
-        process column ((i+j,m,x)::z)
+      process column ((i+j,m,x)::z)
 
     | (i,`F,{node=Break s;_})::z ->
-        output_text s;
-        process (column + String.length s) z
+      output_text s;
+      process (column + String.length s) z
 
     | (i,`B,{node=Break s;_})::z -> 
-        output_newline ();
-        output_spaces i;
-        process i z
+      output_newline ();
+      output_spaces i;
+      process i z
+
+    | (i,`F,{node=HardBreak;_})::z ->
+      assert false
+
+    | (i,`B,{node=HardBreak;_})::z ->
+      output_newline ();
+      output_spaces i;
+      process i z
 
     | (i,`F,{node=AlignSpc n;_})::z ->
-        process column z
+      process column z
 
     | (i,`B,{node=AlignSpc n;_})::z -> 
-        output_spaces n;
-        process (column + n) z
+      output_spaces n;
+      process (column + n) z
 
-    | (i,_,{node=Group x;flat_width})::z ->
-        if flat_width < width-column then
-          process column ((i,`F,x)::z)
-        else
-          process column ((i,`B,x)::z)
+    | (i,_,{node=Group x;flat_width=Some flat_width})::z
+        when flat_width < width-column ->
+      process column ((i,`F,x)::z)
+
+    | (i,_,{node=Group x;_})::z ->
+      process column ((i,`B,x)::z)
   in
   process 0 [(0,`F,group doc)]
 
