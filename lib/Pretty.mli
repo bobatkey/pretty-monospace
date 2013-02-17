@@ -43,10 +43,10 @@ val break_with : string -> document
     breaks. *)
 val hardbreak : document
 
-(** [alignSpc n] renders as [n] spaces if the enclosing group is
-    formatted {i with} line breaks, and acts the same as {!empty}
+(** [alignment_spaces n] renders as [n] spaces if the enclosing group
+    is formatted {i with} line breaks, and acts the same as {!empty}
     otherwise. *)
-val alignSpc : int -> document
+val alignment_spaces : int -> document
 
 (** Create a grouped sub-document for which the decision to format
     with line breaks or without is made as a whole. *)

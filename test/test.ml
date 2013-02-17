@@ -37,7 +37,7 @@ let random_document_of_depth depth =
       | 3 -> nest (Random.int 10) (make (depth-1))
       | 4 -> break (* with? *)
       | 5 -> hardbreak
-      | 6 -> alignSpc (Random.int 20)
+      | 6 -> alignment_spaces (Random.int 20)
       | 7 -> group (make (depth-1))
       | 8 -> align (make (depth-1))
       | _ -> assert false
@@ -151,12 +151,12 @@ let prop_nest_text () =
         forall (int_range 0 12) ^$ fun n ->
           text s ^^ nest n d =~= nest n (text s ^^ d)  
 
-let prop_nest_alignSpc () =
+let prop_nest_alignment_spaces () =
   check_property ^$
     forall document ^$ fun d ->
       forall (int_range 0 40) ^$ fun n1 ->
         forall (int_range 0 40) ^$ fun n2 ->
-          alignSpc n1 ^^ nest n2 d =~= nest n2 (alignSpc n1 ^^ d)
+          alignment_spaces n1 ^^ nest n2 d =~= nest n2 (alignment_spaces n1 ^^ d)
 
 let prop_align_text () =
   check_property ^$
@@ -270,16 +270,16 @@ let test_break_with2 () =
     ~document:(text "xxx" ^^ break_with "---" ^^ text "yyy")
     ~expected_output:"xxx\nyyy"
 
-let test_alignSpc1 () =
+let test_alignment_spaces1 () =
   check_render
     ~width:7
-    ~document:(text "xxx" ^^ alignSpc 3 ^^ text "=" ^^ break ^^ text "yyy")
+    ~document:(text "xxx" ^^ alignment_spaces 3 ^^ text "=" ^^ break ^^ text "yyy")
     ~expected_output:"xxx   =\nyyy"
 
-let test_alignSpc2 () =
+let test_alignment_spaces2 () =
   check_render
     ~width:8
-    ~document:(text "xxx" ^^ alignSpc 3 ^^ text "=" ^^ break ^^ text "yyy")
+    ~document:(text "xxx" ^^ alignment_spaces 3 ^^ text "=" ^^ break ^^ text "yyy")
     ~expected_output:"xxx= yyy"
 
 (* FIXME: and more... *)
@@ -299,8 +299,8 @@ let suite =
       ; "group2"          >:: test_group2
       ; "break_with1"     >:: test_break_with1
       ; "break_with2"     >:: test_break_with2
-      ; "alignSpc1"       >:: test_alignSpc1
-      ; "alignSpc2"       >:: test_alignSpc2
+      ; "alignment_spaces1">:: test_alignment_spaces1
+      ; "alignment_spaces2">:: test_alignment_spaces2
       ]
 
     ; "combinator properties" >:::
@@ -316,7 +316,7 @@ let suite =
       ; "nest_group"        >:: prop_nest_group
       ; "zero_nest"         >:: prop_zero_nest
       ; "nest_nest"         >:: prop_nest_nest
-      ; "nest_alignSpc"     >:: prop_nest_alignSpc
+      ; "nest_alignment_spaces">:: prop_nest_alignment_spaces
 
       ; "align_empty"       >:: prop_align_empty
       ; "align_text"        >:: prop_align_text

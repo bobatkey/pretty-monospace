@@ -57,7 +57,7 @@ and document_node =
   | Nest     of int * document (** increment the indentation level *)
   | Break    of string (** the string if the containing group is formatted flat, a newline otherwise *)
   | HardBreak (** a mandatory line break *)
-  | AlignSpc of int (** 'n' spaces if the containing group is formatted with line breaks, nothing otherwise *)
+  | AlignSpaces of int (** 'n' spaces if the containing group is formatted with line breaks, nothing otherwise *)
   | Align    of document (** set the indentation level to the current column *)
   | Group    of document (** group a sub-document for deciding whether to break lines or not *)
 
@@ -101,8 +101,8 @@ let group doc =
   ; flat_width = doc.flat_width
   }
 
-let alignSpc n =
-  { node       = AlignSpc n
+let alignment_spaces n =
+  { node       = AlignSpaces n
   ; flat_width = Some 0
   }
 
@@ -154,7 +154,7 @@ let record fields =
     let spacer = max_name_width - String.length fieldname in
     text fieldname
     ^^ text " "
-    ^^ alignSpc spacer
+    ^^ alignment_spaces spacer
     ^^ text "="
     ^^ group (nest 2 (break ^^ doc))
   in
@@ -165,7 +165,7 @@ let record fields =
                 ^^ text "}"))
 
 let array pp array =
-  let sep = break_with "" ^^ text ", " ^^ alignSpc 1 in
+  let sep = break_with "" ^^ text ", " ^^ alignment_spaces 1 in
   group (align (text "[| "
                 ^^ map_concat_array pp sep array
                 ^^ break
@@ -173,20 +173,20 @@ let array pp array =
 
 let list elements =
   group (align (text "["
-                ^^ alignSpc 1
+                ^^ alignment_spaces 1
                 ^^ concat (break_with "" ^^ text "; ") elements
                 ^^ break_with ""
                 ^^ text "]"))
 
 let set elements =
   group (align (text "{| "
-                ^^ concat (break_with "" ^^ text ", " ^^ alignSpc 1) elements
+                ^^ concat (break_with "" ^^ text ", " ^^ alignment_spaces 1) elements
                 ^^ break
                 ^^ text "|}"))
 
 let tuple elements =
   group (align (text "("
-                ^^ alignSpc 1
+                ^^ alignment_spaces 1
                 ^^ concat (break_with "" ^^ text ", ") elements
                 ^^ break_with ""
                 ^^ text ")"))
@@ -246,10 +246,10 @@ let format output_text output_newline output_spaces width doc =
       output_spaces i;
       process i z
 
-    | (i,`F,{node=AlignSpc n;_})::z ->
+    | (i,`F,{node=AlignSpaces n;_})::z ->
       process column z
 
-    | (i,`B,{node=AlignSpc n;_})::z -> 
+    | (i,`B,{node=AlignSpaces n;_})::z ->
       output_spaces n;
       process (column + n) z
 
