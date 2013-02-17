@@ -254,7 +254,7 @@ let format output_text output_newline output_spaces width doc =
       process (column + n) z
 
     | (i,_,{node=Group x;flat_width=Some flat_width})::z
-        when flat_width < width-column ->
+        when flat_width <= width-column ->
       process column ((i,`F,x)::z)
 
     | (i,_,{node=Group x;_})::z ->

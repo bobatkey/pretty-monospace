@@ -18,3 +18,16 @@ Document "pretty-monospace"
   Install:              true
   XOcamlbuildPath:      lib
   XOcamlbuildLibraries: pretty-monospace
+
+Executable test
+  Path: test
+  MainIs: test.ml
+  Install: false
+  CompiledObject: byte
+  BuildDepends: oUnit, pretty-monospace
+
+Test "pretty-monospace"
+  Type: custom (0.3)
+  Command: $test
+  WorkingDirectory: test
+  TestTools: test
