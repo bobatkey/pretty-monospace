@@ -195,6 +195,11 @@ let prop_align_nest () =
       forall (int_range 1 12) ^$ fun n ->
         nest n (align d) =~= align d
 
+let prop_align_align () =
+  check_property ^$
+    forall document ^$ fun d ->
+      align (align d) =~= align d
+
 let prop_group_empty () =
   check_property ^$
     (group empty =~= empty)
@@ -435,6 +440,7 @@ let suite =
       ; "align_text"        >:: prop_align_text
       ; "align_group"       >:: prop_align_group
       ; "align_nest"        >:: prop_align_nest
+      ; "align_align"       >:: prop_align_align
 
       ; "text_group"        >:: prop_text_group
       ; "group_empty"       >:: prop_group_empty
