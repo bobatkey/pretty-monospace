@@ -1,6 +1,30 @@
 open OUnit
 open Pretty
 
+let intersperse separator xs =
+  let rec loop acc = function
+    | []    -> List.rev acc
+    | x::xs ->
+      (match acc with
+        | [] -> loop [x] xs
+        | _  -> loop (x::separator::acc) xs)
+  in loop [] xs
+
+let bool () =
+  Random.bool ()
+
+let float_range minimum maximum () =
+  (* FIXME: this is wrong... *)
+  Random.float (maximum -. minimum) +. minimum
+
+let list gen () =
+  let length = Random.int 20 in
+  let rec loop acc = function
+    | 0 -> acc
+    | n -> loop (gen () :: acc) (n-1)
+  in
+  loop [] length
+
 (* FIXME: do UTF8 *)
 let printable_string () =
   let length = Random.int 100 in
@@ -58,9 +82,10 @@ let document_context () =
   make (Random.int 10)
 
 let document () = 
-  random_document_of_depth (Random.int 7)
+  random_document_of_depth (Random.int 10)
 
 let int_range minimum maximum () =
+  (* FIXME: overflow *)
   Random.int (maximum - minimum + 1) + minimum
 
 let forall domain predicate = fun () ->
@@ -199,6 +224,73 @@ let prop_break_with () =
   check_property ^$
     (break =~= break_with " ")
 
+let prop_append_space () =
+  check_property ^$
+    forall document ^$ fun d1 ->
+      forall document ^$ fun d2 ->
+        d1 ^^ text " " ^^ d2 =~= d1 ^+^ d2
+
+let prop_append_break () =
+  check_property ^$
+    forall document ^$ fun d1 ->
+      forall document ^$ fun d2 ->
+        d1 ^^ break ^^ d2 =~= d1 ^/^ d2
+
+let prop_append_hardbreak () =
+  check_property ^$
+    forall document ^$ fun d1 ->
+      forall document ^$ fun d2 ->
+        d1 ^^ hardbreak ^^ d2 =~= d1 ^//^ d2
+
+let prop_concat () =
+  check_property ^$
+    forall (list document) ^$ fun ds ->
+      forall document ^$ fun d ->
+        concat d ds =~= List.fold_left ( ^^ ) empty (intersperse d ds)
+
+let prop_map_concat_array () =
+  check_property ^$
+    forall (list document) ^$ fun ds ->
+      forall document ^$ fun d ->
+        let f i x = (*Pretty.int i ^^*) x in
+        map_concat_array f d (Array.of_list ds)
+          =~=
+        List.fold_left ( ^^ ) empty (intersperse d ds)
+
+let prop_int () =
+  check_property ^$
+    forall (int_range (-1000) 1000) ^$ fun i ->
+      text (string_of_int i) =~= Pretty.int i
+
+let prop_bool () =
+  check_property ^$
+    forall bool ^$ fun b ->
+      text (if b then "true" else "false") =~= Pretty.bool b
+
+let prop_unit () =
+  check_property ^$
+    (text "()" =~= Pretty.unit)
+
+let prop_string () =
+  check_property ^$
+    forall printable_string ^$ fun s ->
+      text ("\"" ^ String.escaped s ^ "\"") =~= Pretty.string s
+
+let prop_float () =
+  check_property ^$
+    forall (float_range (-2e30) (2e30)) ^$ fun f ->
+      text (string_of_float f) =~= Pretty.float f
+
+let prop_list () =
+  check_property ^$
+    forall (list document) ^$ fun ds ->
+      Pretty.list ds =~=
+        group (align (text "["
+                      ^^ alignment_spaces 1
+                      ^^ concat (break_with "" ^^ text "; ") ds
+                      ^^ break_with ""
+                      ^^ text "]"))
+
 (* FIXME: and the rest... *)
 
 (******************************************************************************)
@@ -227,11 +319,29 @@ let test_hardbreak () =
     ~document:(text "xxx" ^^ hardbreak ^^ text "yyy")
     ~expected_output:"xxx\nyyy"
 
-let test_nest () =
+let test_break1 () =
+  check_render
+    ~width:80
+    ~document:(text "xxx" ^^ break ^^ text "yyy")
+    ~expected_output:"xxx yyy"
+
+let test_break2 () =
+  check_render
+    ~width:2
+    ~document:(text "xxx" ^^ break ^^ text "yyy")
+    ~expected_output:"xxx\nyyy"
+
+let test_nest1 () =
   check_render
     ~width:3
     ~document:(text "xxx" ^^ nest 2 (break ^^ text "yyy"))
     ~expected_output:"xxx\n  yyy"
+
+let test_nest2 () =
+  check_render
+    ~width:10
+    ~document:(text "xxx" ^^ nest 2 (break ^^ text "yyy"))
+    ~expected_output:"xxx yyy"
 
 let test_align1 () =
   check_render
@@ -291,8 +401,11 @@ let suite =
       [ "text"            >:: test_text
       ; "append"          >:: test_append
       ; "empty"           >:: test_empty
+      ; "break1"          >:: test_break1
+      ; "break2"          >:: test_break2
       ; "hardbreak"       >:: test_hardbreak
-      ; "nest"            >:: test_nest
+      ; "nest1"           >:: test_nest1
+      ; "nest2"           >:: test_nest2
       ; "align1"          >:: test_align1
       ; "align2"          >:: test_align2
       ; "group1"          >:: test_group1
@@ -331,10 +444,20 @@ let suite =
 
     ; "derived combinator properties" >:::
       [ "break_with"        >:: prop_break_with
+      ; "append_space"      >:: prop_append_space
+      ; "append_break"      >:: prop_append_break
+      ; "append_hardbreak"  >:: prop_append_hardbreak
+      ; "concat"            >:: prop_concat
+      ; "map_concat_array"  >:: prop_map_concat_array
+      ; "int"               >:: prop_int
+      ; "bool"              >:: prop_bool
+      ; "unit"              >:: prop_unit
+      ; "string"            >:: prop_string
+      ; "float"             >:: prop_float
+      ; "list"              >:: prop_list
       ]
     ]
 
 let _ =
   Random.self_init ();
   run_test_tt_main suite
-
