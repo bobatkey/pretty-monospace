@@ -91,7 +91,7 @@ let break =
   ; flat_width = Some 1
   }
 
-let breakWith s =
+let break_with s =
   { node       = Break s
   ; flat_width = Some (String.length s) (* FIXME: UTF8 *)
   }
@@ -159,13 +159,13 @@ let record fields =
     ^^ group (nest 2 (break ^^ doc))
   in
   group (align (text "{ "
-                ^^ concat (breakWith "" ^^ text "; ")
+                ^^ concat (break_with "" ^^ text "; ")
                           (List.map pp_field fields)
                 ^^ break
                 ^^ text "}"))
 
 let array pp array =
-  let sep = breakWith "" ^^ text ", " ^^ alignSpc 1 in
+  let sep = break_with "" ^^ text ", " ^^ alignSpc 1 in
   group (align (text "[| "
                 ^^ map_concat_array pp sep array
                 ^^ break
@@ -174,21 +174,21 @@ let array pp array =
 let list elements =
   group (align (text "["
                 ^^ alignSpc 1
-                ^^ concat (breakWith "" ^^ text "; ") elements
-                ^^ breakWith ""
+                ^^ concat (break_with "" ^^ text "; ") elements
+                ^^ break_with ""
                 ^^ text "]"))
 
 let set elements =
   group (align (text "{| "
-                ^^ concat (breakWith "" ^^ text ", " ^^ alignSpc 1) elements
+                ^^ concat (break_with "" ^^ text ", " ^^ alignSpc 1) elements
                 ^^ break
                 ^^ text "|}"))
 
 let tuple elements =
   group (align (text "("
                 ^^ alignSpc 1
-                ^^ concat (breakWith "" ^^ text ", ") elements
-                ^^ breakWith ""
+                ^^ concat (break_with "" ^^ text ", ") elements
+                ^^ break_with ""
                 ^^ text ")"))
 
 let application head arguments =

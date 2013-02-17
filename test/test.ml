@@ -197,7 +197,7 @@ let prop_group_hardbreak () =
 (* Check the derived combinators *)
 let prop_break_with () =
   check_property ^$
-    (break =~= breakWith " ")
+    (break =~= break_with " ")
 
 (* FIXME: and the rest... *)
 
@@ -258,16 +258,16 @@ let test_group2 () =
                ^^ group (break ^^ group (text "yyy" ^^ break ^^ text "zzzz")))
     ~expected_output:"xxx\nyyy zzzz"
 
-let test_breakWith1 () =
+let test_break_with1 () =
   check_render
     ~width:10
-    ~document:(text "xxx" ^^ breakWith "---" ^^ text "yyy")
+    ~document:(text "xxx" ^^ break_with "---" ^^ text "yyy")
     ~expected_output:"xxx---yyy"
 
-let test_breakWith2 () =
+let test_break_with2 () =
   check_render
     ~width:8
-    ~document:(text "xxx" ^^ breakWith "---" ^^ text "yyy")
+    ~document:(text "xxx" ^^ break_with "---" ^^ text "yyy")
     ~expected_output:"xxx\nyyy"
 
 let test_alignSpc1 () =
@@ -297,8 +297,8 @@ let suite =
       ; "align2"          >:: test_align2
       ; "group1"          >:: test_group1
       ; "group2"          >:: test_group2
-      ; "breakWith1"      >:: test_breakWith1
-      ; "breakWith2"      >:: test_breakWith2
+      ; "break_with1"     >:: test_break_with1
+      ; "break_with2"     >:: test_break_with2
       ; "alignSpc1"       >:: test_alignSpc1
       ; "alignSpc2"       >:: test_alignSpc2
       ]

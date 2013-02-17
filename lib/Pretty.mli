@@ -23,8 +23,9 @@ val empty : document
 
 (** A document just containing some text. For the formatting of
     documents to work correctly, the string argument must not contain
-    newline characters (['\n']). Use the primitive {!break} or
-    {!breakWith} combinators instead. *)
+    newline characters (['\n']) or tab characters (['\t']). Use the
+    primitive {!break} or {!break_with} combinators, or the {!nest} and
+    {!align} combinators instead. *)
 val text : string -> document
 
 (** Increment the indentation added after each line break if the
@@ -32,14 +33,10 @@ val text : string -> document
 val nest : int -> document -> document
 
 (** A newline if the enclosing group is formatted with line breaks,
-    otherwise a single space [" "]. *)
-val break : document
-
-(** A newline if the enclosing group is formatted with line breaks,
     otherwise the supplied string. For document formatting to work
     correctly, the string argument must not contain newline characters
-    (['\n']). *)
-val breakWith : string -> document
+    (['\n']) or tab characters (['\t']). *)
+val break_with : string -> document
 
 (** A break that always renders as a newline plus indentation. Any
     group that contains a [hardbreak] is forced to render with line
@@ -59,6 +56,10 @@ val group : document -> document
 val align : document -> document
 
 (**{2 Derived pretty-printing combinators} *)
+
+(** A newline if the enclosing group is formatted with line breaks,
+    otherwise a single space [" "]. Equivalent to [break_with " "]. *)
+val break : document
 
 (** [x ^+^ y] is equivalent to [x ^^ text " " ^^ y]. *)
 val (^+^) : document -> document -> document
@@ -120,10 +121,11 @@ val constructor : string -> document list -> document
    group in the document with or without linebreaks. In short, if
    there is enough space left on the current line (i.e., from the
    current position up to [width]) to format a group without line
-   breaks, then this is done. Otherwise the group is formatted with
-   line breaks.
+   breaks, then the group is formatte without line breaks. Otherwise
+   the group is formatted with line breaks.
 
-   The [width] argument defaults to [80] in all cases.
+   The optional [width] argument defaults to [80] in all the functions
+   listed below.
 
    Note that specifying the [width] argument does not guarantee that
    the output will never exceed the given width. Uses of the primitive
