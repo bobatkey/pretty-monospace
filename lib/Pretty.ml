@@ -255,6 +255,10 @@ let print ?(width=80) doc =
     width
     doc
 
+let print_endline ?(width=80) doc =
+  print ~width doc;
+  print_newline ()
+
 let prerr ?(width=80) doc =
   format
     prerr_string
@@ -262,6 +266,10 @@ let prerr ?(width=80) doc =
     (fun n -> prerr_string (String.make n ' '))
     width
     doc
+
+let prerr_endline ?(width=80) doc =
+  prerr ~width doc;
+  prerr_newline ()
 
 let output ?(width=80) ch doc =
   format

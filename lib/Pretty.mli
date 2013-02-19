@@ -195,16 +195,24 @@ val constructor : string -> document list -> document
    force indentations above the specified width.
 *)
 
-(** Print a document to [stdout]. *)
+(** Pretty-print a document to [stdout]. *)
 val print : ?width:int -> document -> unit
 
-(** Print a document to [stderr]. *)
+(** Pretty-print a document to [stdout], followed by a newline
+    character. *)
+val print_endline : ?width:int -> document -> unit
+
+(** Pretty-print a document to [stderr]. *)
 val prerr : ?width:int -> document -> unit
 
-(** Print a document to an {!out_channel}. *)
+(** Pretty-print a document to [stderr], followed by a newline
+    character. *)
+val prerr_endline : ?width:int -> document -> unit
+
+(** Pretty-print a document to an {!out_channel}. *)
 val output : ?width:int -> out_channel -> document -> unit
 
-(** Render a document to a string. *)
+(** Pretty-print a document to a string. *)
 val to_string : ?width:int -> document -> string
 
 (** Format a document with custom output functions. *)
