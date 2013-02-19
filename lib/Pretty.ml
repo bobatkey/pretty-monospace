@@ -47,11 +47,6 @@ let hardbreak =
   ; flat_width = None
   }
 
-let break =
-  { node       = Break " "
-  ; flat_width = Some 1
-  }
-
 let break_with s =
   { node       = Break s
   ; flat_width = Some (String.length s) (* FIXME: UTF8 *)
@@ -73,6 +68,11 @@ let align doc =
   }
 
 (******************************************************************************)
+let break =
+  { node       = Break " "
+  ; flat_width = Some 1
+  }
+
 let (^+^) x y = x ^^ text " " ^^ y
 
 let (^/^) x y = x ^^ break ^^ y
