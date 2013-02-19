@@ -67,8 +67,10 @@ val empty : document
     {!align} combinators instead. *)
 val text : string -> document
 
-(** Increment the indentation added after each line break if the
-    sub-document is formatted using line breaks. *)
+(** [nest n d] increments the indentation added after each line break
+    if the sub-document [d] is formatted using line breaks. The [n]
+    argument must be greater than or equal to [0], otherwise an
+    [Invalid_argument] exception is raised. *)
 val nest : int -> document -> document
 
 (** A newline if the enclosing group is formatted with line breaks,
@@ -84,7 +86,8 @@ val hardbreak : document
 
 (** [alignment_spaces n] renders as [n] spaces if the enclosing group
     is formatted {i with} line breaks, and acts the same as {!empty}
-    otherwise. *)
+    otherwise. The int [n] must be greater than [0], otherwise an
+    [Invalid_argument] exception is raised. *)
 val alignment_spaces : int -> document
 
 (** Create a grouped sub-document for which the decision to format
@@ -102,7 +105,9 @@ val align : document -> document
 val break : document
 
 (** [spaces n] represents a document of [n] spaces. Equivalent to
-    [text (String.make ' ' n)]. *)
+    [text (String.make ' ' n)]. The int [n] must be greater than or
+    equal to [0], otherwise an [Invalid_argument] exception is
+    raised. *)
 val spaces : int -> document
 
 (** [space] represents a document with a single space. Equivalent to
@@ -133,7 +138,9 @@ val wrap : document -> document list -> document
 
 (** [indent n d] indents by [n] spaces and then sets the indentation
     column to be the current column. [indent n d] is equivalent to
-    [text (String.make n ' ') ^^ align d]. *)
+    [text (String.make n ' ') ^^ align d]. The int [n] must be greater
+    than or equal to [0], otherwise an [Invalid_argument] exception is
+    raised. *)
 val indent : int -> document -> document
 
 (**{3 Pretty printing of primitive data types} *)

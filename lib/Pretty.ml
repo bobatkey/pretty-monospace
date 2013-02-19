@@ -38,10 +38,14 @@ let text s =
   ; flat_width = Some (String.length s) (* FIXME: UTF8 *)
   }
 
-let nest i doc =
-  { node       = Nest (i, doc)
-  ; flat_width = doc.flat_width
-  }
+let nest n doc =
+  if n = 0 then doc
+  else if n < 0 then
+    raise (Invalid_argument "Pretty.nest")
+  else
+    { node       = Nest (n, doc)
+    ; flat_width = doc.flat_width
+    }
 
 let hardbreak =
   { node       = HardBreak
@@ -59,9 +63,13 @@ let group doc =
   }
 
 let alignment_spaces n =
-  { node       = AlignSpaces n
-  ; flat_width = Some 0
-  }
+  if n = 0 then empty
+  else if n < 0 then
+    raise (Invalid_argument "Pretty.alignment_spaces")
+  else
+    { node       = AlignSpaces n
+    ; flat_width = Some 0
+    }
 
 let align doc =
   { node       = Align doc
@@ -76,6 +84,8 @@ let break =
 
 let spaces n =
   if n = 0 then empty
+  else if n < 0 then
+    raise (Invalid_argument "Pretty.spaces")
   else
     { node       = Spaces n
     ; flat_width = Some n
@@ -115,7 +125,9 @@ let wrap sep ds =
          (empty,true)
          ds)
 
-let indent n doc = spaces n ^^ align doc
+let indent n doc =
+  if n < 0 then raise (Invalid_argument "Pretty.indent")
+  else spaces n ^^ align doc
 
 (******************************************************************************)
 let unit = text "()"

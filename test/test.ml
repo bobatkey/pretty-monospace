@@ -364,6 +364,37 @@ let prop_application () =
 (* FIXME: and the rest... *)
 
 (******************************************************************************)
+let test_exn_nest () =
+  check_property ^$
+    forall document ^$ fun d ->
+      forall (int_range (-100) (-1)) ^$ fun n () ->
+        assert_raises
+          (Invalid_argument "Pretty.nest")
+          (fun () -> nest n d)
+
+let test_exn_alignment_spaces () =
+  check_property ^$
+    forall (int_range (-100) (-1)) ^$ fun n () ->
+      assert_raises
+        (Invalid_argument "Pretty.alignment_spaces")
+        (fun () -> alignment_spaces n)
+
+let test_exn_spaces () =
+  check_property ^$
+    forall (int_range (-100) (-1)) ^$ fun n () ->
+      assert_raises
+        (Invalid_argument "Pretty.spaces")
+        (fun () -> spaces n)
+
+let test_exn_indent () =
+  check_property ^$
+    forall document ^$ fun d ->
+      forall (int_range (-100) (-1)) ^$ fun n () ->
+        assert_raises
+          (Invalid_argument "Pretty.indent")
+          (fun () -> indent n d)
+
+(******************************************************************************)
 (* Rendering tests *)
 let test_text () =
   check_render
@@ -505,6 +536,13 @@ let suite =
       ; "alignment_spaces1">:: test_alignment_spaces1
       ; "alignment_spaces2">:: test_alignment_spaces2
       ; "indent"          >:: test_indent
+      ]
+
+    ; "exception tests" >:::
+      [ "nest"             >:: test_exn_nest
+      ; "alignment_spaces" >:: test_exn_alignment_spaces
+      ; "spaces"           >:: test_exn_spaces
+      ; "indent"           >:: test_exn_indent
       ]
 
     ; "combinator properties" >:::
