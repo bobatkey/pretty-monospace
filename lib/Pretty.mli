@@ -98,8 +98,14 @@ val float : float -> document
 val unit : document
 
 (** Pretty print a string value as an escaped string (according to
-    OCaml lexical conventions) wrapped in quotes. *)
+    OCaml lexical conventions) wrapped in quotes. [string s] is
+    equivalent to [text ("\"" ^ String.escaped s ^ "\"")]. *)
 val string : string -> document
+
+(** Pretty print a character wrapped in single quotes, according to
+    the OCaml lexical conventions. [char c] is equivalent to [text
+    ("\'" ^ Char.escaped c ^ "\'")]. *)
+val char : char -> document
 
 (**{3 Pretty printing of data structures} *)
 

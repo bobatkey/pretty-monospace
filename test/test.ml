@@ -25,14 +25,28 @@ let list gen () =
   in
   loop [] length
 
+let printable_char () =
+  Char.chr (Random.int (128 - 32) + 32)
+
+let char () =
+  Char.chr (Random.int 256)
+
 (* FIXME: do UTF8 *)
 let printable_string () =
   let length = Random.int 100 in
-  let buffer = Buffer.create length in
-  for i = 1 to length do
-    Buffer.add_char buffer (Char.chr (Random.int (128 - 32) + 32))
+  let str    = String.create length in
+  for i = 0 to length - 1 do
+    str.[i] <- printable_char ()
   done;
-  Buffer.contents buffer
+  str
+
+let string () =
+  let length = Random.int 100 in
+  let str    = String.create length in
+  for i = 0 to length - 1 do
+    str.[i] <- char ()
+  done;
+  str
 
 type document_context =
   | Hole
@@ -282,8 +296,13 @@ let prop_unit () =
 
 let prop_string () =
   check_property ^$
-    forall printable_string ^$ fun s ->
+    forall string ^$ fun s ->
       text ("\"" ^ String.escaped s ^ "\"") =~= Pretty.string s
+
+let prop_char () =
+  check_property ^$
+    forall char ^$ fun c ->
+      text ("\'" ^ Char.escaped c ^ "\'") =~= Pretty.char c
 
 let prop_float () =
   check_property ^$
@@ -476,6 +495,7 @@ let suite =
       ; "bool"              >:: prop_bool
       ; "unit"              >:: prop_unit
       ; "string"            >:: prop_string
+      ; "char"              >:: prop_char
       ; "float"             >:: prop_float
       ; "list"              >:: prop_list
       ; "wrap"              >:: prop_wrap

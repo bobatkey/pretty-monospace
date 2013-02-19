@@ -115,6 +115,12 @@ let bool = function
 
 let float f = text (string_of_float f)
 
+let string str =
+  text "\"" ^^ text (String.escaped str) ^^ text "\""
+
+let char c =
+  text "\'" ^^ text (Char.escaped c) ^^ text "\'"
+
 let record fields =
   let max_name_width =
     List.fold_left max 0 (List.map String.length (List.map fst fields))
@@ -167,10 +173,6 @@ let constructor name arguments = match arguments with
   | []  -> text name
   | [x] -> group (align (text name ^^ nest 2 (break ^^ x)))
   | xs  -> group (align (text name ^^ nest 2 (break ^^ tuple xs)))
-
-let string str =
-  text "\"" ^^ text (String.escaped str) ^^ text "\""
-
 
 (******************************************************************************)
 let format output_text output_newline output_spaces width doc =
