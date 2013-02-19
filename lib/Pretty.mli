@@ -2,21 +2,60 @@
 
 (**{1 Pretty Printing Library} *)
 
-(** A pretty printing library, based on Wadler's {i A Prettier
+(** A pretty printing library, based on Philip Wadler's {i A Prettier
     Printer}, and Christian Lindig's {i Strictly Pretty}. Some ideas
     and clarity extracted from Doaitse Swierstra and Olaf Chitil's {i
     Linear, Bounded, Functional Pretty-Printing}. *)
 
 (**{2 Primitive Combinators}
 
+   This section lists the primitive combinators used to build
+   documents for pretty-printing.
 *)
 
 (** The abstract type of documents. *)
 type document
 
+(** The primitive combinators in this section obey the following
+    equational laws, in the sense that the left and right side are
+    interchangable within any {!document} expression. The ranges of
+    quantification are as follows:
+
+    - [d], [d1], [d2], [d3] stand for any value of type {!document}.
+    - [n], [n1], [n2] stand for any natural number - i.e., any [int]
+    [i] such that [i >=0].
+    - [s], [s1], [s2] stand for any string of printable characters,
+    including spaces [' '].
+    - [c] stands for any {!document} expression with a single hole.
+    The notation [c[d]] stands for the plugging of [d] for the
+    hole in [c].
+
+    The laws:
+
+    + [forall d. d =~= empty ^^ d]
+    + [forall d. d =~= d ^^ empty]
+    + [forall d1 d2 d3. d1 ^^ (d2 ^^ d3) =~= (d1 ^^ d2) ^^ d3]
+    + [forall s1 s2. text s1 ^^ text s2 =~= text (s1 ^ s2)]
+    + [text "" =~= empty]
+    + [forall d s. group (text s ^^ d) =~= text s ^^ group d]
+    + [forall d n. group (nest n d) =~= nest d (group d)]
+    + [forall d. group (align d) =~= align (group d)]
+    + [forall d s n. text s ^^ nest n d =~= nest n (test s ^^ d)]
+    + [forall d n1 n2. alignment_spaces n1 ^^ nest n2 d =~= nest n2 (alignment_spaces n1 ^^ d)]
+    + [alignment_spaces 0 =~= empty]
+    + [forall d s. align (test s ^^ nest (String.length s) d) =~= text s ^^ align d]
+    + [forall d n. nest n (align d) =~= align d]
+    + [forall d. align (align d) =~= align d]
+    + [group empty =~= empty]
+    + [forall n. nest n empty =~= empty]
+    + [align empty =~= empty]
+    + [forall d. group (group d) =~= group d]
+    + [forall c. group (c[hardbreak]) =~= c[hardbreak]]
+*)
+
 (** Concatenation of two documents. Concatenation of document is
     constant time. *)
-val (^^) : document -> document -> document
+val ( ^^ ) : document -> document -> document
 
 (** The empty document. *)
 val empty : document
@@ -55,6 +94,7 @@ val group : document -> document
 (** Set the indentation level to be the current column. *)
 val align : document -> document
 
+
 (**{2 Derived pretty-printing combinators} *)
 
 (** A newline if the enclosing group is formatted with line breaks,
@@ -62,13 +102,13 @@ val align : document -> document
 val break : document
 
 (** [x ^+^ y] is equivalent to [x ^^ text " " ^^ y]. *)
-val (^+^) : document -> document -> document
+val ( ^+^ ) : document -> document -> document
 
 (** [x ^/^ y] is equivalent to [x ^^ break ^^ y]. *)
-val (^/^) : document -> document -> document
+val ( ^/^ ) : document -> document -> document
 
 (** [x ^//^ y] is equivalent to [x ^^ hardbreak ^^ y]. *)
-val (^//^) : document -> document -> document
+val ( ^//^ ) : document -> document -> document
 
 (** [concat sep [x0; x1; ...; xn]] is equivalent to [x0 ^^ sep ^^ x1
     ^^ ... ^^ sep ^^ xn]. *)
