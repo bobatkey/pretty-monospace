@@ -183,6 +183,10 @@ let prop_nest_alignment_spaces () =
         forall (int_range 0 40) ^$ fun n2 ->
           alignment_spaces n1 ^^ nest n2 d =~= nest n2 (alignment_spaces n1 ^^ d)
 
+let prop_alignment_spaces_empty () =
+  check_property ^$
+    (alignment_spaces 0 =~= empty)
+
 let prop_align_text () =
   check_property ^$
     forall document ^$ fun d ->
@@ -435,6 +439,8 @@ let suite =
       ; "zero_nest"         >:: prop_zero_nest
       ; "nest_nest"         >:: prop_nest_nest
       ; "nest_alignment_spaces">:: prop_nest_alignment_spaces
+
+      ; "alignment_spaces_empty">:: prop_alignment_spaces_empty
 
       ; "align_empty"       >:: prop_align_empty
       ; "align_text"        >:: prop_align_text
