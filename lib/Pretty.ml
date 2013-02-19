@@ -15,6 +15,7 @@ and document_node =
   | Empty (** the empty document *)
   | Append   of document * document (** two documents, one after the other *)
   | Text     of string (** some text *)
+  | Spaces   of int (** some spaces *)
   | Nest     of int * document (** increment the indentation level *)
   | Break    of string (** the string if the containing group is formatted flat, a newline otherwise *)
   | HardBreak (** a mandatory line break *)
@@ -73,6 +74,16 @@ let break =
   ; flat_width = Some 1
   }
 
+let spaces n =
+  if n = 0 then empty
+  else
+    { node       = Spaces n
+    ; flat_width = Some n
+    }
+
+let space =
+  spaces 1
+
 let (^+^) x y = x ^^ text " " ^^ y
 
 let (^/^) x y = x ^^ break ^^ y
@@ -103,6 +114,8 @@ let wrap sep ds =
            ((if first then x else d ^^ sep ^^ group (break ^^ x)), false))
          (empty,true)
          ds)
+
+let indent n doc = spaces n ^^ align doc
 
 (******************************************************************************)
 let unit = text "()"
@@ -189,6 +202,10 @@ let format output_text output_newline output_spaces width doc =
     | (i,m,{node=Text s;_})::z ->
       output_text s;
       process (column + String.length s) z
+
+    | (i,m,{node=Spaces n;_})::z ->
+      output_spaces n;
+      process (column + n) z
 
     | (i,m,{node=Align x;_})::z ->
       process column ((column,m,x)::z)

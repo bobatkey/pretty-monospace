@@ -101,6 +101,14 @@ val align : document -> document
     otherwise a single space [" "]. Equivalent to [break_with " "]. *)
 val break : document
 
+(** [spaces n] represents a document of [n] spaces. Equivalent to
+    [text (String.make ' ' n)]. *)
+val spaces : int -> document
+
+(** [space] represents a document with a single space. Equivalent to
+    [spaces 1] or [text " "]. *)
+val space : document
+
 (** [x ^+^ y] is equivalent to [x ^^ text " " ^^ y]. *)
 val ( ^+^ ) : document -> document -> document
 
@@ -122,6 +130,11 @@ val map_concat_array : (int -> 'a -> document) -> document -> 'a array -> docume
     equivalent to [concat sep (x :: List.map (fun x -> group (break ^^ x))
     xs)]. *)
 val wrap : document -> document list -> document
+
+(** [indent n d] indents by [n] spaces and then sets the indentation
+    column to be the current column. [indent n d] is equivalent to
+    [text (String.make n ' ') ^^ align d]. *)
+val indent : int -> document -> document
 
 (**{3 Pretty printing of primitive data types} *)
 

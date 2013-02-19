@@ -247,6 +247,15 @@ let prop_break_with () =
   check_property ^$
     (break =~= break_with " ")
 
+let prop_spaces () =
+  check_property ^$
+    forall (int_range 0 20) ^$ fun n ->
+      spaces n =~= text (String.make n ' ')
+
+let prop_space () =
+  check_property ^$
+    (space =~= text " ")
+
 let prop_append_space () =
   check_property ^$
     forall document ^$ fun d1 ->
@@ -318,6 +327,12 @@ let prop_wrap () =
           | d::ds ->
             wrap sep (d::ds) =~=
               concat sep (d :: List.map (fun x -> group (break ^^ x)) ds)
+
+let prop_indent () =
+  check_property ^$
+    forall document ^$ fun d ->
+      forall (int_range 0 20) ^$ fun n ->
+        indent n d =~= spaces n ^^ align d
 
 (******************************************************************************)
 let prop_list () =
@@ -459,6 +474,12 @@ let test_alignment_spaces2 () =
     ~document:(text "xxx" ^^ alignment_spaces 3 ^^ text "=" ^^ break ^^ text "yyy")
     ~expected_output:"xxx= yyy"
 
+let test_indent () =
+  check_render
+    ~width:8
+    ~document:(text "xxx" ^^ indent 3 (text "yyy" ^/^ text "zzz"))
+    ~expected_output:"xxx   yyy\n      zzz"
+
 (* FIXME: and more... *)
 
 (******************************************************************************)
@@ -483,6 +504,7 @@ let suite =
       ; "break_with2"     >:: test_break_with2
       ; "alignment_spaces1">:: test_alignment_spaces1
       ; "alignment_spaces2">:: test_alignment_spaces2
+      ; "indent"          >:: test_indent
       ]
 
     ; "combinator properties" >:::
@@ -516,6 +538,8 @@ let suite =
 
     ; "derived combinator properties" >:::
       [ "break_with"        >:: prop_break_with
+      ; "spaces"            >:: prop_spaces
+      ; "space"             >:: prop_space
       ; "append_space"      >:: prop_append_space
       ; "append_break"      >:: prop_append_break
       ; "append_hardbreak"  >:: prop_append_hardbreak
@@ -531,6 +555,7 @@ let suite =
       ; "tuple"             >:: prop_tuple
       ; "application"       >:: prop_application
       ; "wrap"              >:: prop_wrap
+      ; "indent"            >:: prop_indent
       ]
     ]
 
