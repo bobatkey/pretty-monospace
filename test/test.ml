@@ -382,6 +382,18 @@ let test_nest2 () =
     ~document:(text "xxx" ^^ nest 2 (break ^^ text "yyy"))
     ~expected_output:"xxx yyy"
 
+let test_nest3 () =
+  check_render
+    ~width:10
+    ~document:(text "xxx" ^^ nest 3 (group (break ^^ text "yyy")) ^/^ text "zzzz")
+    ~expected_output:"xxx yyy\nzzzz"
+
+let test_nest4 () =
+  check_render
+    ~width:10
+    ~document:(text "xxx" ^^ nest 3 (group (break ^^ text "yyy") ^/^ text "zzzz"))
+    ~expected_output:"xxx yyy\n   zzzz"
+
 let test_align1 () =
   check_render
     ~width:9
@@ -445,6 +457,8 @@ let suite =
       ; "hardbreak"       >:: test_hardbreak
       ; "nest1"           >:: test_nest1
       ; "nest2"           >:: test_nest2
+      ; "nest3"           >:: test_nest3
+      ; "nest4"           >:: test_nest4
       ; "align1"          >:: test_align1
       ; "align2"          >:: test_align2
       ; "group1"          >:: test_group1
