@@ -78,7 +78,10 @@ val concat : document -> document list -> document
     [pp 0 x0 ^^ sep ^^ pp 1 x1 ^^ ... ^^ sep ^^ pp n xn]. *)
 val map_concat_array : (int -> 'a -> document) -> document -> 'a array -> document
 
-val wordwrap : string -> document
+(** [wrap sep []] is equivalent to {!empty}. [wrap sep (x::xs)] is
+    equivalent to [concat sep (x :: List.map (fun x -> group (break ^^ x))
+    xs)]. *)
+val wrap : document -> document list -> document
 
 (**{3 Pretty printing of primitive data types} *)
 

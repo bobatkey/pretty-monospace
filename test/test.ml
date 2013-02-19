@@ -290,6 +290,17 @@ let prop_float () =
     forall (float_range (-2e30) (2e30)) ^$ fun f ->
       text (string_of_float f) =~= Pretty.float f
 
+let prop_wrap () =
+  check_property ^$
+    forall document ^$ fun sep ->
+      forall (list document) ^$ fun ds ->
+        match ds with
+          | [] -> wrap sep ds =~= empty
+          | d::ds ->
+            wrap sep (d::ds) =~=
+              concat sep (d :: List.map (fun x -> group (break ^^ x)) ds)
+
+(******************************************************************************)
 let prop_list () =
   check_property ^$
     forall (list document) ^$ fun ds ->
@@ -467,6 +478,7 @@ let suite =
       ; "string"            >:: prop_string
       ; "float"             >:: prop_float
       ; "list"              >:: prop_list
+      ; "wrap"              >:: prop_wrap
       ]
     ]
 

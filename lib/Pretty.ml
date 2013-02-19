@@ -1,42 +1,3 @@
-module Char = struct
-  let is_whitespace c =
-    c = ' ' || c = '\t' || c = '\n'
-end
-
-module Words = struct
-  let fold_lefti f ~initial str =
-    let rec ws i a pos =
-      if pos = String.length str then
-        a
-      else if Char.is_whitespace str.[pos] then
-        ws i a (pos+1)
-      else
-        word i a pos pos
-    and word i a start pos =
-      let extract () = String.sub str start (pos-start) in
-      if pos = String.length str then
-        f i a (extract ())
-      else if Char.is_whitespace str.[pos] then
-        ws (i+1) (f i a (extract ())) pos
-      else
-        word i a start (pos+1)
-    in ws 0 initial 0
-
-  let fold_left f ~initial str =
-    fold_lefti (fun _ a w -> f a w) ~initial str
-
-  let iter f str =
-    fold_left (fun () w -> f w) ~initial:() str
-
-  (** FIXME: iterate with spacer? *)
-
-  let to_list str =
-    List.rev (fold_left (fun ws w -> w::ws) ~initial:[] str)
-
-(* FIXME: to_array, using Dynarray *)
-end
-
-(******************************************************************************)
 let lift2 f x y = match x,y with
   | None, _ -> None
   | _, None -> None
@@ -136,6 +97,14 @@ let map_concat_array pp sep array =
     empty
     array
 
+let wrap sep ds =
+  fst (List.fold_left
+         (fun (d,first) x ->
+           ((if first then x else d ^^ sep ^^ group (break ^^ x)), false))
+         (empty,true)
+         ds)
+
+(******************************************************************************)
 let unit = text "()"
 
 let int i = text (string_of_int i)
@@ -202,10 +171,6 @@ let constructor name arguments = match arguments with
 let string str =
   text "\"" ^^ text (String.escaped str) ^^ text "\""
 
-let wordwrap str =
-  Words.fold_lefti ~initial:empty
-    (fun i d w -> if i = 0 then text w else d ^^ group (break ^^ text w))
-    str
 
 (******************************************************************************)
 let format output_text output_newline output_spaces width doc =
