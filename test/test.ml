@@ -329,6 +329,22 @@ let prop_list () =
                       ^^ concat (break_with "" ^^ text "; ") ds
                       ^^ break_with ""
                       ^^ text "]"))
+let prop_tuple () =
+  check_property ^$
+    forall (list document) ^$ fun ds ->
+      Pretty.tuple ds =~=
+        align (text "("
+               ^^ group (alignment_spaces 1
+                         ^^ concat (break_with "" ^^ text ", ") ds
+                         ^^ break_with ""
+                         ^^ text ")"))
+
+let prop_application () =
+  check_property ^$
+    forall document ^$ fun d ->
+      forall (list document) ^$ fun ds ->
+        application d ds =~=
+          group (align (d ^^ nest 2 (break ^^ concat break ds)))
 
 (* FIXME: and the rest... *)
 
@@ -512,6 +528,8 @@ let suite =
       ; "char"              >:: prop_char
       ; "float"             >:: prop_float
       ; "list"              >:: prop_list
+      ; "tuple"             >:: prop_tuple
+      ; "application"       >:: prop_application
       ; "wrap"              >:: prop_wrap
       ]
     ]
