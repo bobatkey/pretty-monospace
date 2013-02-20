@@ -200,60 +200,78 @@ let constructor name arguments = match arguments with
   | xs  -> group (align (text name ^^ nest 2 (break ^^ tuple xs)))
 
 (******************************************************************************)
+type item = int * [`F|`B] * document
+
+let rec fits left : item list -> bool = function
+  | _                when left < 0 -> false
+  | []                             -> true
+  | (i,_, {node=Empty})::z         -> fits left z
+  | (i,m, {node=Append (x,y)})::z  -> fits left ((i,m,x)::(i,m,y)::z)
+  | (i,_, {node=Text s})::z        -> fits (left-String.length s) z
+  | (i,_, {node=Spaces n})::z      -> fits (left-n) z
+  | (i,m, {node=Align x})::z       -> fits left ((i,m,x)::z)
+  | (i,m, {node=Nest (j,x)})::z    -> fits left ((i,m,x)::z)
+  | (i,`F,{node=Break s})::z       -> fits (left-String.length s) z
+  | (i,`B,{node=Break _})::z       -> true
+  | (i,_, {node=HardBreak})::z     -> true
+  | (i,`F,{node=AlignSpaces n})::z -> fits left z
+  | (i,`B,{node=AlignSpaces n})::z -> fits (left-n) z
+  | (i,_, {node=Group x})::z       -> fits left ((i,`B,x)::z)
+
 let format output_text output_newline output_spaces width doc =
   let rec process column = function
     | [] ->
       ()
 
-    | (i,m,{node=Empty;_})::z ->
+    | (i,m,{node=Empty})::z ->
       process column z
 
-    | (i,m,{node=Append (x,y);_})::z ->
+    | (i,m,{node=Append (x,y)})::z ->
       process column ((i,m,x)::(i,m,y)::z)
 
-    | (i,m,{node=Text s;_})::z ->
+    | (i,m,{node=Text s})::z ->
       output_text s;
       process (column + String.length s) z
 
-    | (i,m,{node=Spaces n;_})::z ->
+    | (i,m,{node=Spaces n})::z ->
       output_spaces n;
       process (column + n) z
 
-    | (i,m,{node=Align x;_})::z ->
+    | (i,m,{node=Align x})::z ->
       process column ((column,m,x)::z)
 
-    | (i,m,{node=Nest (j,x);_})::z ->
+    | (i,m,{node=Nest (j,x)})::z ->
       process column ((i+j,m,x)::z)
 
-    | (i,`F,{node=Break s;_})::z ->
+    | (i,`F,{node=Break s})::z ->
       output_text s;
       process (column + String.length s) z
 
-    | (i,`B,{node=Break s;_})::z -> 
+    | (i,`B,{node=Break s})::z ->
       output_newline ();
       output_spaces i;
       process i z
 
-    | (i,`F,{node=HardBreak;_})::z ->
+    | (i,`F,{node=HardBreak})::z ->
       assert false
 
-    | (i,`B,{node=HardBreak;_})::z ->
+    | (i,`B,{node=HardBreak})::z ->
       output_newline ();
       output_spaces i;
       process i z
 
-    | (i,`F,{node=AlignSpaces n;_})::z ->
+    | (i,`F,{node=AlignSpaces n})::z ->
       process column z
 
-    | (i,`B,{node=AlignSpaces n;_})::z ->
+    | (i,`B,{node=AlignSpaces n})::z ->
       output_spaces n;
       process (column + n) z
 
     | (i,_,{node=Group x;flat_width=Some flat_width})::z
-        when flat_width <= width-column ->
+        when fits (width-column-flat_width) z ->
       process column ((i,`F,x)::z)
 
-    | (i,_,{node=Group x;_})::z ->
+    | (i,_,{node=Group x})::z ->
       process column ((i,`B,x)::z)
   in
   process 0 [(0,`F,group doc)]

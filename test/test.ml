@@ -524,9 +524,38 @@ let test_indent () =
     ~document:(text "xxx" ^^ indent 3 (text "yyy" ^/^ text "zzz"))
     ~expected_output:"xxx   yyy\n      zzz"
 
+(* These three tests test that the breaking computation takes into
+   account all of the queued print jobs on the current line *)
+let test_lineleft_doc =
+  text "begin"
+  ^^ nest 3 (break
+             ^^ group (text "stmt;"
+                       ^/^ text "stmt;"
+                       ^/^ text "stmt;"))
+  ^^ text "end"
+
+let test_lineleft1 () =
+  check_render
+    ~width:10
+    ~document:test_lineleft_doc
+    ~expected_output:"begin\n   stmt;\n   stmt;\n   stmt;end"
+
+let test_lineleft2 () =
+  check_render
+    ~width:20
+    ~document:test_lineleft_doc
+    ~expected_output:"begin\n   stmt;\n   stmt;\n   stmt;end"
+
+let test_lineleft3 () =
+  check_render
+    ~width:30
+    ~document:test_lineleft_doc
+    ~expected_output:"begin stmt; stmt; stmt;end"
+
 (* FIXME: and more... *)
 
 (******************************************************************************)
+(* Tests to check that the output functions agree with each other *)
 let prop_custom_output () =
   check_property ^$
     forall document ^$ fun d ->
@@ -575,6 +604,9 @@ let suite =
       ; "alignment_spaces1">:: test_alignment_spaces1
       ; "alignment_spaces2">:: test_alignment_spaces2
       ; "indent"          >:: test_indent
+      ; "lineleft1"       >:: test_lineleft1
+      ; "lineleft2"       >:: test_lineleft2
+      ; "lineleft3"       >:: test_lineleft3
       ]
 
     ; "exception tests" >:::
