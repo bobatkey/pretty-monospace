@@ -1,6 +1,19 @@
 open OUnit
 open Pretty
 
+let read_file fnm =
+  let ch = open_in_bin fnm in
+  let buffer  = Buffer.create 8192 in
+  let tmp_buf = String.create 8192 in
+  let rec loop () =
+    let num_read = input ch tmp_buf 0 8192 in
+    if num_read = 0 then ()
+    else (Buffer.add_substring buffer tmp_buf 0 num_read;
+          loop ())
+  in
+  loop ();
+  Buffer.contents buffer
+
 let intersperse separator xs =
   let rec loop acc = function
     | []    -> List.rev acc
@@ -514,6 +527,32 @@ let test_indent () =
 (* FIXME: and more... *)
 
 (******************************************************************************)
+let prop_custom_output () =
+  check_property ^$
+    forall document ^$ fun d ->
+      forall (int_range 1 100) ^$ fun n () ->
+        let b = Buffer.create 8192 in
+        custom_format ~width:n
+          ~output_text:(Buffer.add_string b)
+          ~output_newline:(fun () -> Buffer.add_char b '\n')
+          ~output_spaces:(fun n -> Buffer.add_string b (String.make n ' '))
+          d;
+        assert_equal ~printer:String.escaped
+          (Buffer.contents b) (to_string ~width:n d)
+
+let prop_output () =
+  check_property ^$
+    forall document ^$ fun d ->
+      forall (int_range 1 200) ^$ fun n ->
+        bracket_tmpfile ^$ fun (fnm, ch) ->
+          output ~width:n ch d;
+          close_out ch;
+          let str = read_file fnm in
+          assert_equal ~printer:String.escaped
+            str
+            (to_string ~width:n d)
+
+(******************************************************************************)
 let suite =
   "pretty-monospace tests" >:::
     [ "rendering tests" >:::
@@ -594,6 +633,11 @@ let suite =
       ; "application"       >:: prop_application
       ; "wrap"              >:: prop_wrap
       ; "indent"            >:: prop_indent
+      ]
+
+    ; "output" >:::
+      [ "custom_output"     >:: prop_custom_output
+      ; "output"            >:: prop_output
       ]
     ]
 

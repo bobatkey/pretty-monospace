@@ -259,30 +259,6 @@ let format output_text output_newline output_spaces width doc =
   process 0 [(0,`F,group doc)]
 
 (******************************************************************************)
-let print ?(width=80) doc =
-  format
-    print_string
-    print_newline
-    (fun n -> print_string (String.make n ' '))
-    width
-    doc
-
-let print_endline ?(width=80) doc =
-  print ~width doc;
-  print_newline ()
-
-let prerr ?(width=80) doc =
-  format
-    prerr_string
-    prerr_newline
-    (fun n -> prerr_string (String.make n ' '))
-    width
-    doc
-
-let prerr_endline ?(width=80) doc =
-  prerr ~width doc;
-  prerr_newline ()
-
 let output ?(width=80) ch doc =
   format
     (fun s  -> output_string ch s)
@@ -290,6 +266,22 @@ let output ?(width=80) ch doc =
     (fun n  -> output_string ch (String.make n ' '))
     width
     doc
+
+let output_endline ?(width=80) ch doc =
+  output ~width ch doc;
+  output_char ch '\n'
+
+let print ?(width=80) doc =
+  output ~width stdout doc
+
+let print_endline ?(width=80) doc =
+  output_endline ~width stdout doc
+
+let prerr ?(width=80) doc =
+  output ~width stderr doc
+
+let prerr_endline ?(width=80) doc =
+  output_endline ~width stderr doc
 
 let to_string ?(width=80) doc =
   let b = Buffer.create 2048 in
@@ -301,7 +293,7 @@ let to_string ?(width=80) doc =
     doc;
   Buffer.contents b
 
-let custom_output ?(width=80)
+let custom_format ?(width=80)
     ~output_text ~output_newline ~output_spaces doc =
   format
     output_text

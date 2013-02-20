@@ -219,11 +219,15 @@ val prerr_endline : ?width:int -> document -> unit
 (** Pretty-print a document to an {!out_channel}. *)
 val output : ?width:int -> out_channel -> document -> unit
 
+(** Pretty-print a document to an {!out_channel}, followed by a
+    newline. *)
+val output_endline : ?width:int -> out_channel -> document -> unit
+
 (** Pretty-print a document to a string. *)
 val to_string : ?width:int -> document -> string
 
 (** Format a document with custom output functions. *)
-val custom_output : ?width:int ->
+val custom_format : ?width:int ->
   output_text:(string -> unit) ->
   output_newline:(unit -> unit) ->
   output_spaces:(int -> unit) ->
