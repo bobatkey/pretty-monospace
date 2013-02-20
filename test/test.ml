@@ -1,3 +1,5 @@
+(* (C) Robert Atkey 2013, see LICENSE for more information. *)
+
 open OUnit
 open Pretty
 

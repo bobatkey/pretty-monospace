@@ -1,3 +1,5 @@
+(* (C) Robert Atkey 2013, see LICENSE for more information. *)
+
 let lift2 f x y = match x,y with
   | None, _ -> None
   | _, None -> None
