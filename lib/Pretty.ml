@@ -31,9 +31,13 @@ let empty =
   }
 
 let (^^) doc1 doc2 =
-  { node       = Append (doc1,doc2)
-  ; flat_width = lift2 (+) doc1.flat_width doc2.flat_width
-  }
+  match doc1, doc2 with
+    | {node=Empty}, _ -> doc2
+    | _, {node=Empty} -> doc1
+    | doc1, doc2 ->
+      { node       = Append (doc1,doc2)
+      ; flat_width = lift2 (+) doc1.flat_width doc2.flat_width
+      }
 
 let text s =
   { node       = Text s
