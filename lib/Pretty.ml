@@ -218,7 +218,9 @@ let rec fits left : item list -> bool = function
   | (i,_, {node=HardBreak})::z     -> true
   | (i,`F,{node=AlignSpaces n})::z -> fits left z
   | (i,`B,{node=AlignSpaces n})::z -> fits (left-n) z
-  | (i,_, {node=Group x})::z       -> fits left ((i,`B,x)::z)
+  | (i,_, {node=Group x;flat_width=Some flat_width})::z
+                                   -> fits (left-flat_width) z
+  | (i,_, {node=Group x})::z       -> fits left ((i,`F,x)::z)
 
 let format output_text output_newline output_spaces width doc =
   let rec process column = function
@@ -269,6 +271,9 @@ let format output_text output_newline output_spaces width doc =
       output_spaces n;
       process (column + n) z
 
+    | (i,`F,{node=Group x})::z ->
+      process column ((i,`F,x)::z)
+
     | (i,_,{node=Group x;flat_width=Some flat_width})::z
         when fits (width-column-flat_width) z ->
       process column ((i,`F,x)::z)
@@ -276,7 +281,7 @@ let format output_text output_newline output_spaces width doc =
     | (i,_,{node=Group x})::z ->
       process column ((i,`B,x)::z)
   in
-  process 0 [(0,`F,group doc)]
+  process 0 [(0,`B,group doc)]
 
 (******************************************************************************)
 let output ?(width=80) ch doc =
