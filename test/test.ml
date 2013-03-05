@@ -375,7 +375,7 @@ let prop_indent () =
 let prop_list () =
   check_property ^$
     forall (list document) ^$ fun ds ->
-      Pretty.list ds =~=
+      Pretty.HorizOrVertical.list ds =~=
         group (align (text "["
                       ^^ alignment_spaces 1
                       ^^ join (break_with "" ^^ text "; ") ds
@@ -384,7 +384,7 @@ let prop_list () =
 let prop_tuple () =
   check_property ^$
     forall (list document) ^$ fun ds ->
-      Pretty.tuple ds =~=
+      Pretty.HorizOrVertical.tuple ds =~=
         align (text "("
                ^^ group (alignment_spaces 1
                          ^^ join (break_with "" ^^ text ", ") ds

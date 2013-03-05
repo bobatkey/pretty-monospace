@@ -181,21 +181,47 @@ val string : string -> document
     ("\'" ^ Char.escaped c ^ "\'")]. *)
 val char : char -> document
 
-(**{3 Pretty printing of data structures} *)
+(**{3 Pretty printing of collections} *)
 
-val record : (string * document) list -> document
+module type COLLECTIONS = sig
+  val delimited :
+    left:string ->
+    sep:string ->
+    right:string ->
+    document list ->
+    document
 
-val list : document list -> document
+  val delimited_array :
+    left:string ->
+    sep:string ->
+    right:string ->
+    document array ->
+    document
 
-val array : (int -> 'a -> document) -> 'a array -> document
+  val associative :
+    left:string ->
+    map:string ->
+    sep:string ->
+    right:string ->
+    (string * document) list ->
+    document
 
-val set : document list -> document
+  val list : document list -> document
 
-val tuple : document list -> document
+  val array : (int -> 'a -> document) -> 'a array -> document
+
+  val set : document list -> document
+
+  val tuple : document list -> document
+
+  val constructor : string -> document list -> document
+end
+
+module HorizOrVertical : COLLECTIONS
+
+module Wrapped : COLLECTIONS
 
 val application : document -> document list -> document
-
-val constructor : string -> document list -> document
 
 (**{2 Rendering} 
 

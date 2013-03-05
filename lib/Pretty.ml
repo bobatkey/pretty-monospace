@@ -177,23 +177,180 @@ let string str =
 let char c =
   text "\'" ^^ text (Char.escaped c) ^^ text "\'"
 
-let record fields =
-  let max_name_width =
-    List.fold_left max 0 (List.map String.length (List.map fst fields))
-  in
-  let pp_field (fieldname, doc) =
-    let spacer = max_name_width - String.length fieldname in
-    text fieldname
-    ^^ text " "
-    ^^ alignment_spaces spacer
-    ^^ text "="
-    ^^ group (nest 2 (break ^^ doc))
-  in
-  group (align (text "{ "
-                ^^ map_join pp_field (break_with "" ^^ text "; ") fields
-                ^^ break
-                ^^ text "}"))
+(******************************************************************************)
+module type COLLECTIONS = sig
+  val delimited :
+    left:string ->
+    sep:string ->
+    right:string ->
+    document list ->
+    document
 
+  val delimited_array :
+    left:string ->
+    sep:string ->
+    right:string ->
+    document array ->
+    document
+
+  val associative :
+    left:string ->
+    map:string ->
+    sep:string ->
+    right:string ->
+    (string * document) list ->
+    document
+
+  val list : document list -> document
+
+  val array : (int -> 'a -> document) -> 'a array -> document
+
+  val set : document list -> document
+
+  val tuple : document list -> document
+
+  val constructor : string -> document list -> document
+end
+
+module HorizOrVertical = struct
+  let delimited ~left ~sep ~right documents =
+    let n = String.length left - 1 in
+    let sep' =
+      break_with ""
+      ^^ text sep
+      ^^ text " "
+      ^^ alignment_spaces n
+    in
+    align (text left
+           ^^ group (alignment_spaces 1
+                     ^^ join sep' documents
+                     ^^ break_with ""
+                     ^^ text right))
+
+  let delimited_array ~left ~sep ~right documents =
+    let n = String.length left - 1 in
+    let sep' =
+      break_with ""
+      ^^ text sep
+      ^^ text " "
+      ^^ alignment_spaces n
+    in
+    align (text left
+           ^^ group (alignment_spaces 1
+                     ^^ join_array sep' documents
+                     ^^ break_with ""
+                     ^^ text right))
+
+  let associative ~left ~map ~sep ~right fields =
+    let max_name_width =
+      List.fold_left
+        (fun n (x,_) -> max n (String.length x)) 0 fields
+    in
+    let pp_field (fieldname, doc) =
+      let spacer = max_name_width - String.length fieldname in
+      text fieldname
+      ^^ text " "
+      ^^ alignment_spaces spacer
+      ^^ text map
+      ^^ group (nest 2 (break ^^ doc))
+    in
+    let sep' =
+      break_with "" ^^ text sep ^^ text " "
+    in
+    group (align (text left
+                  ^^ text " "
+                  ^^ map_join pp_field sep' fields
+                  ^^ break
+                  ^^ text right))
+
+  let array pp elements =
+    delimited_array
+      ~left:"[|"
+      ~right:"|]"
+      ~sep:";"
+      (Array.mapi pp elements)
+
+  let list elements =
+    delimited
+      ~left:"["
+      ~sep:";"
+      ~right:"]"
+      elements
+
+  let set elements =
+    delimited
+      ~left:"{"
+      ~sep:","
+      ~right:"}"
+      elements
+
+  let tuple elements =
+    delimited
+      ~left:"("
+      ~sep:","
+      ~right:")"
+      elements
+
+  let constructor name arguments = match arguments with
+    | []  -> text name
+    | [x] -> group (align (text name ^^ nest 2 (break ^^ x)))
+    | xs  -> group (align (text name ^^ nest 2 (break ^^ tuple xs)))
+end
+
+module Wrapped = struct
+  let delimited ~left ~sep ~right documents =
+    text left
+    ^^ align (group (wrap (text sep) documents
+                     ^^ text right))
+
+  let delimited_array ~left ~sep ~right documents =
+    text left
+    ^^ align (group (wrap_array (text sep) documents
+                     ^^ text right))
+
+  let associative ~left ~map ~sep ~right fields =
+    let pp_field (fieldname, doc) =
+      text fieldname ^+^ text map ^^ group (nest 2 (break ^^ doc))
+    in
+    group (text left ^^ text " "
+           ^^ align (map_join pp_field (text sep ^^ break) fields
+                     ^^ text " " ^^ text right))
+
+  let array pp elements =
+    delimited_array
+      ~left:"[|"
+      ~right:"|]"
+      ~sep:";"
+      (Array.mapi pp elements)
+
+  let list elements =
+    delimited
+      ~left:"["
+      ~sep:";"
+      ~right:"]"
+      elements
+
+  let set elements =
+    delimited
+      ~left:"{"
+      ~sep:","
+      ~right:"}"
+      elements
+
+  let tuple elements =
+    delimited
+      ~left:"("
+      ~sep:","
+      ~right:")"
+      elements
+
+  let constructor name arguments = match arguments with
+    | []  -> text name
+    | [x] -> group (align (text name ^^ nest 2 (break ^^ x)))
+    | xs  -> group (align (text name ^^ nest 2 (break ^^ tuple xs)))
+end
+
+(*
 let array pp array =
   let sep = break_with "" ^^ text ", " ^^ alignment_spaces 1 in
   group (align (text "[| "
@@ -220,14 +377,32 @@ let tuple elements =
                 ^^ join (break_with "" ^^ text ", ") elements
                 ^^ break_with ""
                 ^^ text ")"))
+(*
+  delimited_collection
+    ~left:"["
+    ~sep:";"
+    ~right:"]"
+    elements
 
+let set elements =
+  delimited_collection
+    ~left:"{"
+    ~sep:","
+    ~right:"}"
+    elements
+
+let tuple elements =
+  delimited_collection
+    ~left:"("
+    ~sep:","
+    ~right:")"
+    elements
+*)
+*)
+
+(******************************************************************************)
 let application head arguments =
   group (align (head ^^ nest 2 (break ^^ join break arguments)))
-
-let constructor name arguments = match arguments with
-  | []  -> text name
-  | [x] -> group (align (text name ^^ nest 2 (break ^^ x)))
-  | xs  -> group (align (text name ^^ nest 2 (break ^^ tuple xs)))
 
 (******************************************************************************)
 type item = int * [`F|`B] * document
