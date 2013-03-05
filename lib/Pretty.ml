@@ -106,7 +106,7 @@ let (^/^) x y = x ^^ break ^^ y
 
 let (^//^) x y = x ^^ hardbreak ^^ y
 
-let concat sep list =
+let join sep list =
   let i = ref 0 in
   List.fold_left
     (fun doc x ->
@@ -115,7 +115,25 @@ let concat sep list =
     empty
     list
 
-let map_concat_array pp sep array =
+let map_join pp sep list =
+  let i = ref 0 in
+  List.fold_left
+    (fun doc x ->
+      let doc' = if !i = 0 then pp x else doc ^^ sep ^^ pp x
+      in incr i; doc')
+    empty
+    list
+
+let join_array sep array =
+  let i = ref 0 in
+  Array.fold_left
+    (fun doc x ->
+      let doc' = if !i = 0 then x else doc ^^ sep ^^ x
+      in incr i; doc')
+    empty
+    array
+
+let map_join_array pp sep array =
   let i = ref 0 in
   Array.fold_left
     (fun doc x ->
@@ -165,40 +183,39 @@ let record fields =
     ^^ group (nest 2 (break ^^ doc))
   in
   group (align (text "{ "
-                ^^ concat (break_with "" ^^ text "; ")
-                          (List.map pp_field fields)
+                ^^ map_join pp_field (break_with "" ^^ text "; ") fields
                 ^^ break
                 ^^ text "}"))
 
 let array pp array =
   let sep = break_with "" ^^ text ", " ^^ alignment_spaces 1 in
   group (align (text "[| "
-                ^^ map_concat_array pp sep array
+                ^^ map_join_array pp sep array
                 ^^ break
                 ^^ text "|]"))
 
 let list elements =
   group (align (text "["
                 ^^ alignment_spaces 1
-                ^^ concat (break_with "" ^^ text "; ") elements
+                ^^ join (break_with "" ^^ text "; ") elements
                 ^^ break_with ""
                 ^^ text "]"))
 
 let set elements =
   group (align (text "{| "
-                ^^ concat (break_with "" ^^ text ", " ^^ alignment_spaces 1) elements
+                ^^ join (break_with "" ^^ text ", " ^^ alignment_spaces 1) elements
                 ^^ break
                 ^^ text "|}"))
 
 let tuple elements =
   group (align (text "("
                 ^^ alignment_spaces 1
-                ^^ concat (break_with "" ^^ text ", ") elements
+                ^^ join (break_with "" ^^ text ", ") elements
                 ^^ break_with ""
                 ^^ text ")"))
 
 let application head arguments =
-  group (align (head ^^ nest 2 (break ^^ concat break arguments)))
+  group (align (head ^^ nest 2 (break ^^ join break arguments)))
 
 let constructor name arguments = match arguments with
   | []  -> text name

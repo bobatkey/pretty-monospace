@@ -125,17 +125,25 @@ val ( ^/^ ) : document -> document -> document
 (** [x ^//^ y] is equivalent to [x ^^ hardbreak ^^ y]. *)
 val ( ^//^ ) : document -> document -> document
 
-(** [concat sep [x0; x1; ...; xn]] is equivalent to [x0 ^^ sep ^^ x1
+(** [join sep [x0; x1; ...; xn]] is equivalent to [x0 ^^ sep ^^ x1
     ^^ ... ^^ sep ^^ xn]. *)
-val concat : document -> document list -> document
+val join : document -> document list -> document
 
-(** [map_concat_array pp sep [| x0; x1; ...; xn |]] is equivalent to
-    [pp 0 x0 ^^ sep ^^ pp 1 x1 ^^ ... ^^ sep ^^ pp n xn]. *)
-val map_concat_array : (int -> 'a -> document) -> document -> 'a array -> document
+(** [map_join pp sep [x0; x1; ...; xn]] is equivalent to [pp x0 ^^ sep
+    ^^ pp x1 ^^ ... ^^ sep ^^ pp xn]. *)
+val map_join : ('a -> document) -> document -> 'a list -> document
+
+(** [join_array seo [| x0; x1; ...; xn |] is equivalent to [x0 ^^ sep
+    ^^ x1 ^^ ... ^^ sep ^^ xn]. *)
+val join_array : document -> document array -> document
+
+(** [map_join_array pp sep [| x0; x1; ...; xn |]] is equivalent to [pp
+    0 x0 ^^ sep ^^ pp 1 x1 ^^ ... ^^ sep ^^ pp n xn]. *)
+val map_join_array : (int -> 'a -> document) -> document -> 'a array -> document
 
 (** [wrap sep []] is equivalent to {!empty}. [wrap sep (x::xs)] is
-    equivalent to [concat sep (x :: List.map (fun x -> group (break ^^ x))
-    xs)]. *)
+    equivalent to [join sep (x :: List.map (fun x -> group (break ^^
+    x)) xs)]. *)
 val wrap : document -> document list -> document
 
 (** [indent n d] indents by [n] spaces and then sets the indentation

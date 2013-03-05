@@ -289,18 +289,34 @@ let prop_append_hardbreak () =
       forall document ^$ fun d2 ->
         d1 ^^ hardbreak ^^ d2 =~= d1 ^//^ d2
 
-let prop_concat () =
+let prop_join () =
   check_property ^$
     forall (list document) ^$ fun ds ->
       forall document ^$ fun d ->
-        concat d ds =~= List.fold_left ( ^^ ) empty (intersperse d ds)
+        join d ds =~= List.fold_left ( ^^ ) empty (intersperse d ds)
 
-let prop_map_concat_array () =
+let prop_map_join () =
+  check_property ^$
+    forall (list document) ^$ fun ds ->
+      forall document ^$ fun d ->
+        forall document ^$ fun d' ->
+          let f x = x ^^ d' in
+          map_join f d ds =~= List.fold_left ( ^^ ) empty (intersperse d (List.map f ds))
+
+let prop_join_array () =
+  check_property ^$
+    forall (list document) ^$ fun ds ->
+      forall document ^$ fun d ->
+        join_array d (Array.of_list ds)
+          =~=
+        List.fold_left ( ^^ ) empty (intersperse d ds)
+
+let prop_map_join_array () =
   check_property ^$
     forall (list document) ^$ fun ds ->
       forall document ^$ fun d ->
         let f i x = (*Pretty.int i ^^*) x in
-        map_concat_array f d (Array.of_list ds)
+        map_join_array f d (Array.of_list ds)
           =~=
         List.fold_left ( ^^ ) empty (intersperse d ds)
 
@@ -341,7 +357,7 @@ let prop_wrap () =
           | [] -> wrap sep ds =~= empty
           | d::ds ->
             wrap sep (d::ds) =~=
-              concat sep (d :: List.map (fun x -> group (break ^^ x)) ds)
+              join sep (d :: List.map (fun x -> group (break ^^ x)) ds)
 
 let prop_indent () =
   check_property ^$
@@ -356,7 +372,7 @@ let prop_list () =
       Pretty.list ds =~=
         group (align (text "["
                       ^^ alignment_spaces 1
-                      ^^ concat (break_with "" ^^ text "; ") ds
+                      ^^ join (break_with "" ^^ text "; ") ds
                       ^^ break_with ""
                       ^^ text "]"))
 let prop_tuple () =
@@ -365,7 +381,7 @@ let prop_tuple () =
       Pretty.tuple ds =~=
         align (text "("
                ^^ group (alignment_spaces 1
-                         ^^ concat (break_with "" ^^ text ", ") ds
+                         ^^ join (break_with "" ^^ text ", ") ds
                          ^^ break_with ""
                          ^^ text ")"))
 
@@ -374,7 +390,7 @@ let prop_application () =
     forall document ^$ fun d ->
       forall (list document) ^$ fun ds ->
         application d ds =~=
-          group (align (d ^^ nest 2 (break ^^ concat break ds)))
+          group (align (d ^^ nest 2 (break ^^ join break ds)))
 
 (* FIXME: and the rest... *)
 
@@ -654,8 +670,10 @@ let suite =
       ; "append_space"      >:: prop_append_space
       ; "append_break"      >:: prop_append_break
       ; "append_hardbreak"  >:: prop_append_hardbreak
-      ; "concat"            >:: prop_concat
-      ; "map_concat_array"  >:: prop_map_concat_array
+      ; "join"              >:: prop_join
+      ; "map_join"          >:: prop_map_join
+      ; "join_array"        >:: prop_join_array
+      ; "map_join_array"    >:: prop_map_join_array
       ; "int"               >:: prop_int
       ; "bool"              >:: prop_bool
       ; "unit"              >:: prop_unit
