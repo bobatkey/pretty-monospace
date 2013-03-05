@@ -359,6 +359,12 @@ let prop_wrap () =
             wrap sep (d::ds) =~=
               join sep (d :: List.map (fun x -> group (break ^^ x)) ds)
 
+let prop_wrap_array () =
+  check_property ^$
+    forall document ^$ fun sep ->
+      forall (list document) ^$ fun ds ->
+        wrap sep ds =~= wrap_array sep (Array.of_list ds)
+
 let prop_indent () =
   check_property ^$
     forall document ^$ fun d ->
@@ -684,6 +690,7 @@ let suite =
       ; "tuple"             >:: prop_tuple
       ; "application"       >:: prop_application
       ; "wrap"              >:: prop_wrap
+      ; "wrap_array"        >:: prop_wrap_array
       ; "indent"            >:: prop_indent
       ]
 

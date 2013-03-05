@@ -133,7 +133,7 @@ val join : document -> document list -> document
     ^^ pp x1 ^^ ... ^^ sep ^^ pp xn]. *)
 val map_join : ('a -> document) -> document -> 'a list -> document
 
-(** [join_array seo [| x0; x1; ...; xn |] is equivalent to [x0 ^^ sep
+(** [join_array sep [| x0; x1; ...; xn |]] is equivalent to [x0 ^^ sep
     ^^ x1 ^^ ... ^^ sep ^^ xn]. *)
 val join_array : document -> document array -> document
 
@@ -145,6 +145,10 @@ val map_join_array : (int -> 'a -> document) -> document -> 'a array -> document
     equivalent to [join sep (x :: List.map (fun x -> group (break ^^
     x)) xs)]. *)
 val wrap : document -> document list -> document
+
+(** [wrap_array sep arr] is equivalent to [wrap sep (Array.to_list
+    arr)]. *)
+val wrap_array : document -> document array -> document
 
 (** [indent n d] indents by [n] spaces and then sets the indentation
     column to be the current column. [indent n d] is equivalent to

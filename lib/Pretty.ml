@@ -149,6 +149,13 @@ let wrap sep ds =
          (empty,true)
          ds)
 
+let wrap_array sep ds =
+  fst (Array.fold_left
+         (fun (d,first) x ->
+           ((if first then x else d ^^ sep ^^ group (break ^^ x)), false))
+         (empty,true)
+         ds)
+
 let indent n doc =
   if n < 0 then raise (Invalid_argument "Pretty.indent")
   else spaces n ^^ align doc
