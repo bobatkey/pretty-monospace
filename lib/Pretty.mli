@@ -1,13 +1,17 @@
 (* (C) Robert Atkey 2013, see LICENSE for more information. *)
 
-(** A Pretty Printing Library *)
+(** A Monospace Pretty Printing Library *)
 
-(**{1 Pretty Printing Library} *)
+(**{1 Monospace Pretty Printing Library} *)
 
-(** A pretty printing library, based on Philip Wadler's {i A Prettier
-    Printer}, and Christian Lindig's {i Strictly Pretty}. Some ideas
-    and clarity extracted from Doaitse Swierstra and Olaf Chitil's {i
-    Linear, Bounded, Functional Pretty-Printing}. *)
+(** A pretty printing library for generating monospaced text, based on
+    Philip Wadler's {i A Prettier Printer}, and Christian Lindig's {i
+    Strictly Pretty}. Some ideas and clarity extracted from Doaitse
+    Swierstra and Olaf Chitil's {i Linear, Bounded, Functional
+    Pretty-Printing}.
+
+    FIXME: examples
+*)
 
 (**{2 Primitive Combinators}
 
@@ -264,7 +268,7 @@ val output : ?width:int -> out_channel -> document -> unit
 val output_endline : ?width:int -> out_channel -> document -> unit
 
 (** Pretty-print a document to a string. *)
-val to_string : ?width:int -> document -> string
+val render : ?width:int -> document -> string
 
 (** Format a document with custom output functions. *)
 val custom_format : ?width:int ->
@@ -273,3 +277,7 @@ val custom_format : ?width:int ->
   output_spaces:(int -> unit) ->
   document ->
   unit
+
+(**{2 Debugging}*)
+
+val string_of_document : document -> string

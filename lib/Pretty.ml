@@ -25,6 +25,18 @@ and document_node =
   | Align    of document (** set the indentation level to the current column *)
   | Group    of document (** group a sub-document for deciding whether to break lines or not *)
 
+let rec string_of_document {node} = match node with
+  | Empty         -> "Empty"
+  | Append(d1,d2) -> "Append(" ^ string_of_document d1 ^ "," ^ string_of_document d2 ^ ")"
+  | Text(t)       -> "Text(\""^String.escaped t^"\")"
+  | Spaces i      -> "Spaces("^string_of_int i^")"
+  | Nest(n,d)     -> "Nest("^string_of_int n^","^string_of_document d^")"
+  | Break(s)      -> "Break(\""^String.escaped s^"\")"
+  | HardBreak     -> "HardBreak"
+  | AlignSpaces i -> "AlignSpaces("^string_of_int i^")"
+  | Align d       -> "Align("^string_of_document d^")"
+  | Group d       -> "Group("^string_of_document d^")"
+
 let empty =
   { node       = Empty
   ; flat_width = Some 0
@@ -423,7 +435,7 @@ let rec fits left : item list -> bool = function
   | (i,`B,{node=AlignSpaces n})::z -> fits (left-n) z
   | (i,_, {node=Group x;flat_width=Some flat_width})::z
                                    -> fits (left-flat_width) z
-  | (i,_, {node=Group x})::z       -> fits left ((i,`F,x)::z)
+  | (i,_, {node=Group x})::z       -> fits left ((i,`B,x)::z)
 
 let format output_text output_newline output_spaces width doc =
   let rec process column = function
@@ -511,7 +523,7 @@ let prerr ?(width=80) doc =
 let prerr_endline ?(width=80) doc =
   output_endline ~width stderr doc
 
-let to_string ?(width=80) doc =
+let render ?(width=80) doc =
   let b = Buffer.create 2048 in
   format
     (fun s  -> Buffer.add_string b s)
