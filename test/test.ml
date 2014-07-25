@@ -4,8 +4,6 @@ open OUnit
 open CamlCheck
 open Pretty.Document
 
-let ( @@ ) f x = f x
-
 (******************************************************************************)
 let intersperse separator xs =
   let rec loop acc = function
