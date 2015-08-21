@@ -1,0 +1,12 @@
+opam-version: "1.2"
+name: "pretty-monospace"
+version: "0.1"
+maintainer: "Robert Atkey <bob.atkey@gmail.com>"
+authors: "Robert Atkey <bob.atkey@gmail.com>"
+homepage: ""
+bug-reports: ""
+license: ""
+build: [ "make" ]
+install: [ "make" "install" ]
+remove: [ "make" "uninstall" ]
+depends: "ocamlfind" {build}
