@@ -1,11 +1,7 @@
-# OASIS_START
-# DO NOT EDIT (digest: 3c69b6311660b4b68bd0970bf4c23a12)
 version = "0.1"
 description = "A pretty printing library for monospaced output"
 archive(byte) = "pretty-monospace.cma"
 archive(byte, plugin) = "pretty-monospace.cma"
 archive(native) = "pretty-monospace.cmxa"
-archive(native, plugin) = "pretty-monospace.cmxs"
+# archive(native, plugin) = "pretty-monospace.cmxs"
 exists_if = "pretty-monospace.cma"
-# OASIS_STOP
-

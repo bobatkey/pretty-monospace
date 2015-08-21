@@ -1,4 +1,4 @@
-(* (C) Robert Atkey 2013, see LICENSE for more information. *)
+(* (C) Robert Atkey 2013-2014, see LICENSE for more information. *)
 
 open OUnit
 open CamlCheck
@@ -283,7 +283,7 @@ let prop_unit =
   text "()" =~= Pretty.Document.unit
 
 let prop_string =
-  Property.forall Domain.string @@ fun s ->
+  Property.forall Domain.(string char) @@ fun s ->
     text ("\"" ^ String.escaped s ^ "\"") =~= string s
 
 let prop_char =
