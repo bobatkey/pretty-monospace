@@ -2,10 +2,10 @@
 
 ######################################################################
 
-#OCAML_SOURCE_DIRS := lib test
-#include build-support/OCamlSrcs.makefile
-
 SRCDIR := lib
+include build-support/OCamlSrcs.makefile
+
+SRCDIR := test
 include build-support/OCamlSrcs.makefile
 
 ######################################################################
@@ -14,7 +14,13 @@ include build-support/OCamlSrcs.makefile
 all: lib/_build/pretty-monospace.cma \
      lib/_build/pretty-monospace.cmxa
 
-# FIXME: test
+doc: doc/index.html
+
+doc/index.html: lib/Pretty.mli
+	ocamldoc -html -d doc lib/Pretty.mli
+
+test: test/_build/native_bin/test
+	$<
 
 install: lib/_build/pretty-monospace.cma \
      lib/_build/pretty-monospace.cmxa
@@ -30,4 +36,5 @@ uninstall:
 
 clean:
 	rm -rf $(BUILDDIRS)
+	rm -rf doc/*
 

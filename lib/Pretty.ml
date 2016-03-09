@@ -1,36 +1,60 @@
 (* (C) Robert Atkey 2013, see LICENSE for more information. *)
 
-let lift2 f x y = match x,y with
-  | None, _ -> None
-  | _, None -> None
-  | Some x, Some y -> Some (f x y)
-
-module Document = struct
+module Combinators = struct
   type document =
-      { node       : document_node
-      ; flat_width : int option
-      (** Pre-computed width of this document were it to be formatted
-          without line breaks. [None] if the document contains a hard
-          line break. *)
-      }
+    { node       : document_node
+    ; flat_width : int option
+    (** Pre-computed width of this document were it to be formatted
+        without line breaks. [None] if the document contains a hard
+        line break.
+
+        Invariants: if node is [Empty], [Text], [Spaces], or [Break]
+        then flat_width is always [Some x] for some [x]. *)
+    }
 
   and document_node =
-    | Empty (** the empty document *)
-    | Append   of document * document (** two documents, one after the other *)
-    | Text     of string (** some text *)
-    | Spaces   of int (** some spaces *)
-    | Nest     of int * document (** increment the indentation level *)
-    | Break    of string (** the string if the containing group is formatted flat, a newline otherwise *)
-    | HardBreak (** a mandatory line break *)
-    | AlignSpaces of int (** 'n' spaces if the containing group is formatted with line breaks, nothing otherwise *)
-    | Align    of document (** set the indentation level to the current column *)
-    | Group    of document (** group a sub-document for deciding whether to break lines or not *)
+    | Empty
+    (** the empty document *)
+
+    | Concat of document * document
+    (** two documents, one after the other *)
+
+    | Text of string
+    (** some text *)
+
+    | Spaces of int
+    (** [n] spaces, where [n] is always non-zero and positive. *)
+
+    | Nest of int * document
+    (** format the sub-document with the indentation level incremented
+        by the given amount. The [int] value is always non-zero and
+        positive. *)
+
+    | Break of string
+    (** the string if the containing group is formatted flat, a
+        newline otherwise. *)
+
+    | HardBreak
+    (** a mandatory line break. *)
+
+    | AlignSpaces of int
+    (** [n] spaces if the containing group is formatted with line
+        breaks, the empty string otherwise. The int [n] is always
+        non-zero and positive. *)
+
+    | Align of document
+    (** format the sub-document with the indentation level to the
+        current column *)
+
+    | Group of document
+    (** group a sub-document for deciding whether to break lines or
+        not. *)
 
   type t = document
 
   let rec to_string {node} = match node with
     | Empty         -> "Empty"
-    | Append(d1,d2) -> "Append(" ^ to_string d1 ^ "," ^ to_string d2 ^ ")"
+    | Concat(d1,d2) -> "Concat(" ^ to_string d1 ^ "," ^ to_string d2 ^ ")"
     | Text(t)       -> "Text(\""^String.escaped t^"\")"
     | Spaces i      -> "Spaces("^string_of_int i^")"
     | Nest(n,d)     -> "Nest("^string_of_int n^","^to_string d^")"
@@ -50,19 +74,23 @@ module Document = struct
       | {node=Empty}, _ -> doc2
       | _, {node=Empty} -> doc1
       | doc1, doc2 ->
-        { node       = Append (doc1,doc2)
-        ; flat_width = lift2 (+) doc1.flat_width doc2.flat_width
-        }
+         { node       = Concat (doc1,doc2)
+         ; flat_width =
+             match doc1.flat_width, doc2.flat_width with
+               | None, _ | _, None -> None
+               | Some w1, Some w2  -> Some (w1 + w2)
+         }
 
   let text s =
     { node       = Text s
-    ; flat_width = Some (String.length s) (* FIXME: UTF8 *)
+    ; flat_width = Some (String.length s)
+      (* FIXME: UTF8? use Uucp.Break.tty_width_hint to measure it. *)
     }
 
   let nest n doc =
     if n = 0 then doc
     else if n < 0 then
-      raise (Invalid_argument "Pretty.nest")
+      invalid_arg (__MODULE__ ^ ".nest")
     else
       { node       = Nest (n, doc)
       ; flat_width = doc.flat_width
@@ -75,7 +103,8 @@ module Document = struct
 
   let break_with s =
     { node       = Break s
-    ; flat_width = Some (String.length s) (* FIXME: UTF8 *)
+    ; flat_width = Some (String.length s)
+      (* FIXME: UTF8? use Uucp.Break.tty_width_hint to measure it. *)
     }
 
   let group doc =
@@ -86,7 +115,7 @@ module Document = struct
   let alignment_spaces n =
     if n = 0 then empty
     else if n < 0 then
-      raise (Invalid_argument "Pretty.alignment_spaces")
+      invalid_arg (__MODULE__ ^ ".alignment_spaces")
     else
       { node       = AlignSpaces n
       ; flat_width = Some 0
@@ -106,7 +135,7 @@ module Document = struct
   let spaces n =
     if n = 0 then empty
     else if n < 0 then
-      raise (Invalid_argument "Pretty.spaces")
+      invalid_arg (__MODULE__ ^ ".spaces")
     else
       { node       = Spaces n
       ; flat_width = Some n
@@ -125,8 +154,8 @@ module Document = struct
     let i = ref 0 in
     List.fold_left
       (fun doc x ->
-        let doc' = if !i = 0 then x else doc ^^ sep ^^ x
-        in incr i; doc')
+         let doc' = if !i = 0 then x else doc ^^ sep ^^ x
+         in incr i; doc')
       empty
       list
 
@@ -134,8 +163,8 @@ module Document = struct
     let i = ref 0 in
     List.fold_left
       (fun doc x ->
-        let doc' = if !i = 0 then pp x else doc ^^ sep ^^ pp x
-        in incr i; doc')
+         let doc' = if !i = 0 then pp x else doc ^^ sep ^^ pp x
+         in incr i; doc')
       empty
       list
 
@@ -143,8 +172,8 @@ module Document = struct
     let i = ref 0 in
     Array.fold_left
       (fun doc x ->
-        let doc' = if !i = 0 then x else doc ^^ sep ^^ x
-        in incr i; doc')
+         let doc' = if !i = 0 then x else doc ^^ sep ^^ x
+         in incr i; doc')
       empty
       array
 
@@ -152,276 +181,29 @@ module Document = struct
     let i = ref 0 in
     Array.fold_left
       (fun doc x ->
-        let doc' = if !i = 0 then pp !i x else doc ^^ sep ^^ pp !i x
-        in incr i; doc')
+         let doc' = if !i = 0 then pp !i x else doc ^^ sep ^^ pp !i x
+         in incr i; doc')
       empty
       array
 
   let wrap sep ds =
     fst (List.fold_left
            (fun (d,first) x ->
-             ((if first then x else d ^^ sep ^^ group (break ^^ x)), false))
+              ((if first then x else d ^^ sep ^^ group (break ^^ x)), false))
            (empty,true)
            ds)
 
   let wrap_array sep ds =
     fst (Array.fold_left
            (fun (d,first) x ->
-             ((if first then x else d ^^ sep ^^ group (break ^^ x)), false))
+              ((if first then x else d ^^ sep ^^ group (break ^^ x)), false))
            (empty,true)
            ds)
-
-  let indent n doc =
-    if n < 0 then raise (Invalid_argument "Pretty.indent")
-    else spaces n ^^ align doc
-
-  (****************************************************************************)
-  let unit = text "()"
-
-  let int i = text (string_of_int i)
-
-  let bool = function
-    | true  -> text "true"
-    | false -> text "false"
-
-  let float f = text (string_of_float f)
-
-  let string str =
-    text "\"" ^^ text (String.escaped str) ^^ text "\""
-
-  let char c =
-    text "\'" ^^ text (Char.escaped c) ^^ text "\'"
-
-  (****************************************************************************)
-  module type COLLECTIONS = sig
-    val delimited :
-      left:string ->
-      sep:string ->
-      right:string ->
-      document list ->
-      document
-
-    val delimited_array :
-      left:string ->
-      sep:string ->
-      right:string ->
-      document array ->
-      document
-
-    val associative :
-      left:string ->
-      map:string ->
-      sep:string ->
-      right:string ->
-      (string * document) list ->
-      document
-
-    val list : document list -> document
-
-    val array : (int -> 'a -> document) -> 'a array -> document
-
-    val set : document list -> document
-
-    val tuple : document list -> document
-
-    val constructor : string -> document list -> document
-  end
-
-  module Linear = struct
-    let delimited ~left ~sep ~right documents =
-      let n = String.length left - 1 in
-      let sep' =
-        break_with ""
-        ^^ text sep
-        ^^ text " "
-        ^^ alignment_spaces n
-      in
-      align (text left
-             ^^ group (alignment_spaces 1
-                       ^^ join sep' documents
-                       ^^ break_with ""
-                       ^^ text right))
-
-    let delimited_array ~left ~sep ~right documents =
-      let n = String.length left - 1 in
-      let sep' =
-        break_with ""
-        ^^ text sep
-        ^^ text " "
-        ^^ alignment_spaces n
-      in
-      align (text left
-             ^^ group (alignment_spaces 1
-                       ^^ join_array sep' documents
-                       ^^ break_with ""
-                       ^^ text right))
-
-    let associative ~left ~map ~sep ~right fields =
-      let max_name_width =
-        List.fold_left
-          (fun n (x,_) -> max n (String.length x)) 0 fields
-      in
-      let pp_field (fieldname, doc) =
-        let spacer = max_name_width - String.length fieldname in
-        text fieldname
-        ^^ text " "
-        ^^ alignment_spaces spacer
-        ^^ text map
-        ^^ group (nest 2 (break ^^ doc))
-      in
-      let sep' =
-        break_with "" ^^ text sep ^^ text " "
-      in
-      group (align (text left
-                    ^^ text " "
-                    ^^ map_join pp_field sep' fields
-                    ^^ break
-                    ^^ text right))
-
-    let array pp elements =
-      delimited_array
-        ~left:"[|"
-        ~right:"|]"
-        ~sep:";"
-        (Array.mapi pp elements)
-
-    let list elements =
-      delimited
-        ~left:"["
-        ~sep:";"
-        ~right:"]"
-        elements
-
-    let set elements =
-      delimited
-        ~left:"{"
-        ~sep:","
-        ~right:"}"
-        elements
-
-    let tuple elements =
-      delimited
-        ~left:"("
-        ~sep:","
-        ~right:")"
-        elements
-
-    let constructor name arguments = match arguments with
-      | []  -> text name
-      | [x] -> group (align (text name ^^ nest 2 (break ^^ x)))
-      | xs  -> group (align (text name ^^ nest 2 (break ^^ tuple xs)))
-  end
-
-  module Wrapped = struct
-    let delimited ~left ~sep ~right documents =
-      text left
-      ^^ align (group (wrap (text sep) documents
-                       ^^ text right))
-
-    let delimited_array ~left ~sep ~right documents =
-      text left
-      ^^ align (group (wrap_array (text sep) documents
-                       ^^ text right))
-
-    let associative ~left ~map ~sep ~right fields =
-      let pp_field (fieldname, doc) =
-        text fieldname ^+^ text map ^^ group (nest 2 (break ^^ doc))
-      in
-      group (text left ^^ text " "
-             ^^ align (map_join pp_field (text sep ^^ break) fields
-                       ^^ text " " ^^ text right))
-
-    let array pp elements =
-      delimited_array
-        ~left:"[|"
-        ~right:"|]"
-        ~sep:";"
-        (Array.mapi pp elements)
-
-    let list elements =
-      delimited
-        ~left:"["
-        ~sep:";"
-        ~right:"]"
-        elements
-
-    let set elements =
-      delimited
-        ~left:"{"
-        ~sep:","
-        ~right:"}"
-        elements
-
-    let tuple elements =
-      delimited
-        ~left:"("
-        ~sep:","
-        ~right:")"
-        elements
-
-    let constructor name arguments = match arguments with
-      | []  -> text name
-      | [x] -> group (align (text name ^^ nest 2 (break ^^ x)))
-      | xs  -> group (align (text name ^^ nest 2 (break ^^ tuple xs)))
-  end
-
-(*
-let array pp array =
-  let sep = break_with "" ^^ text ", " ^^ alignment_spaces 1 in
-  group (align (text "[| "
-                ^^ map_join_array pp sep array
-                ^^ break
-                ^^ text "|]"))
-
-let list elements =
-  group (align (text "["
-                ^^ alignment_spaces 1
-                ^^ join (break_with "" ^^ text "; ") elements
-                ^^ break_with ""
-                ^^ text "]"))
-
-let set elements =
-  group (align (text "{| "
-                ^^ join (break_with "" ^^ text ", " ^^ alignment_spaces 1) elements
-                ^^ break
-                ^^ text "|}"))
-
-let tuple elements =
-  group (align (text "("
-                ^^ alignment_spaces 1
-                ^^ join (break_with "" ^^ text ", ") elements
-                ^^ break_with ""
-                ^^ text ")"))
-(*
-  delimited_collection
-    ~left:"["
-    ~sep:";"
-    ~right:"]"
-    elements
-
-let set elements =
-  delimited_collection
-    ~left:"{"
-    ~sep:","
-    ~right:"}"
-    elements
-
-let tuple elements =
-  delimited_collection
-    ~left:"("
-    ~sep:","
-    ~right:")"
-    elements
-*)
-*)
-
-  (****************************************************************************)
-  let application head arguments =
-    group (align (head ^^ nest 2 (break ^^ join break arguments)))
 end
 
-(******************************************************************************)
-open Document
+open Combinators
+
+type document = t
 
 type item = int * [`F|`B] * document
 
@@ -429,8 +211,9 @@ let rec fits left : item list -> bool = function
   | _                when left < 0 -> false
   | []                             -> true
   | (i,_, {node=Empty})::z         -> fits left z
-  | (i,m, {node=Append (x,y)})::z  -> fits left ((i,m,x)::(i,m,y)::z)
-  | (i,_, {node=Text s})::z        -> fits (left-String.length s) z
+  | (i,m, {node=Concat (x,y)})::z  -> fits left ((i,m,x)::(i,m,y)::z)
+  | (i,_, {node=Text s;flat_width=Some w})::z -> fits (left-w) z
+  | (_,_, {node=Text _;flat_width=None})::_   -> assert false
   | (i,_, {node=Spaces n})::z      -> fits (left-n) z
   | (i,m, {node=Align x})::z       -> fits left ((i,m,x)::z)
   | (i,m, {node=Nest (j,x)})::z    -> fits left ((i,m,x)::z)
@@ -445,61 +228,67 @@ let rec fits left : item list -> bool = function
 let format output_text output_newline output_spaces width doc =
   let rec process column = function
     | [] ->
-      ()
+       ()
 
     | (i,m,{node=Empty})::z ->
-      process column z
+       process column z
 
-    | (i,m,{node=Append (x,y)})::z ->
-      process column ((i,m,x)::(i,m,y)::z)
+    | (i,m,{node=Concat (x,y)})::z ->
+       process column ((i,m,x)::(i,m,y)::z)
 
-    | (i,m,{node=Text s})::z ->
-      output_text s;
-      process (column + String.length s) z
+    | (i,m,{node=Text s; flat_width=Some w})::z ->
+       output_text s;
+       process (column + w) z
+
+    | (i,m,{node=Text s; flat_width=None})::z ->
+       assert false
 
     | (i,m,{node=Spaces n})::z ->
-      output_spaces n;
-      process (column + n) z
+       output_spaces n;
+       process (column + n) z
 
     | (i,m,{node=Align x})::z ->
-      process column ((column,m,x)::z)
+       process column ((column,m,x)::z)
 
     | (i,m,{node=Nest (j,x)})::z ->
-      process column ((i+j,m,x)::z)
+       process column ((i+j,m,x)::z)
 
-    | (i,`F,{node=Break s})::z ->
-      output_text s;
-      process (column + String.length s) z
+    | (i,`F,{node=Break s; flat_width=Some w})::z ->
+       output_text s;
+       process (column + w) z
+
+    | (i,`F,{node=Break s; flat_width=None})::z ->
+       assert false
 
     | (i,`B,{node=Break s})::z ->
-      output_newline ();
-      output_spaces i;
-      process i z
+       output_newline ();
+       output_spaces i;
+       process i z
 
     | (i,`F,{node=HardBreak})::z ->
-      assert false
+       assert false
 
     | (i,`B,{node=HardBreak})::z ->
-      output_newline ();
-      output_spaces i;
-      process i z
+       output_newline ();
+       output_spaces i;
+       process i z
 
     | (i,`F,{node=AlignSpaces n})::z ->
-      process column z
+       process column z
 
     | (i,`B,{node=AlignSpaces n})::z ->
-      output_spaces n;
-      process (column + n) z
+       output_spaces n;
+       process (column + n) z
 
     | (i,`F,{node=Group x})::z ->
-      process column ((i,`F,x)::z)
+       process column ((i,`F,x)::z)
 
     | (i,_,{node=Group x;flat_width=Some flat_width})::z
-        when fits (width-column-flat_width) z ->
-      process column ((i,`F,x)::z)
+      when fits (width-column-flat_width) z ->
+       process column ((i,`F,x)::z)
 
     | (i,_,{node=Group x})::z ->
-      process column ((i,`B,x)::z)
+       process column ((i,`B,x)::z)
   in
   process 0 [(0,`B,doc)]
 
@@ -538,8 +327,7 @@ let render ?(width=80) doc =
     doc;
   Buffer.contents b
 
-let custom ?(width=80)
-    ~output_text ~output_newline ~output_spaces doc =
+let custom ?(width=80) ~output_text ~output_newline ~output_spaces doc =
   format
     output_text
     output_newline
