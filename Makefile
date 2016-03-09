@@ -14,10 +14,14 @@ include build-support/OCamlSrcs.makefile
 all: lib/_build/pretty-monospace.cma \
      lib/_build/pretty-monospace.cmxa
 
-doc: doc/index.html
+doc: doc/index.html doc/style.css
 
 doc/index.html: lib/Pretty.mli
-	ocamldoc -html -d doc lib/Pretty.mli
+	mkdir -p doc
+	ocamldoc -html -d doc -css-style style.css lib/Pretty.mli
+
+doc/style.css: style.css
+	cp $< $@
 
 test: test/_build/native_bin/test
 	$<
@@ -36,5 +40,5 @@ uninstall:
 
 clean:
 	rm -rf $(BUILDDIRS)
-	rm -rf doc/*
+	rm -rf doc
 
