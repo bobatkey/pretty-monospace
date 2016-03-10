@@ -44,4 +44,4 @@ uninstall:
 clean:
 	rm -rf $(BUILDDIRS)
 	rm -rf doc
-	rm oUnit-anon.cache
+	rm -f oUnit-anon.cache
