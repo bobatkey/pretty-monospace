@@ -83,7 +83,7 @@ endif
 #                  -no-alias-deps
 
 OCAMLDEP_FLAGS := $(shell build-support/of_merlin -ocamldep-flags $(SRCDIR)/.merlin)
-OCAMLC_FLAGS   := $(shell build-support/of_merlin -ocamlc-flags $(SRCDIR)/.merlin) -no-alias-deps
+OCAMLC_FLAGS   := $(shell build-support/of_merlin -ocamlc-flags $(SRCDIR)/.merlin) -no-alias-deps -bin-annot
 PPX_BINARIES   := $(shell build-support/of_merlin -ppx-bins $(SRCDIR)/.merlin)
 SRCDIRS_OPT    := $(shell build-support/of_merlin -src-dirs $(SRCDIR)/.merlin)
 BINDIRS_OPT    := $(shell build-support/of_merlin -bin-dirs $(SRCDIR)/.merlin)
@@ -152,6 +152,8 @@ OCAML_PRODUCTS += \
     $(OCAML_ML_CMOS) \
     $(patsubst $(SRCDIR)/%.ml,$(BUILDDIR)/%.cmi,$(OCAML_ML_SRCS)) \
     $(patsubst $(SRCDIR)/%.ml,$(BUILDDIR)/%.o,$(OCAML_ML_SRCS)) \
+    $(patsubst $(SRCDIR)/%.ml,$(BUILDDIR)/%.cmti,$(OCAML_ML_SRCS)) \
+    $(patsubst $(SRCDIR)/%.ml,$(BUILDDIR)/%.cmt,$(OCAML_ML_SRCS)) \
     $(OCAML_ML_CMXS) \
     $(OCAML_ML_DEPS)
 
@@ -182,7 +184,8 @@ $(OCAML_ML_CMXS): $(BUILDDIR)/%.cmx: $(SRCDIR)/%.ml $(SRCDIR)/.merlin $(PPX_BINA
 OCAML_MLI_SRCS := $(wildcard $(SRCDIR)/*.mli)
 OCAML_MLI_CMIS := $(patsubst $(SRCDIR)/%.mli,$(BUILDDIR)/%.cmi,$(OCAML_MLI_SRCS))
 OCAML_MLI_DEPS := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%.d,$(OCAML_MLI_SRCS))
-OCAML_PRODUCTS += $(OCAML_MLI_CMIS) $(OCAML_MLI_DEPS)
+OCAML_PRODUCTS += $(OCAML_MLI_CMIS) $(OCAML_MLI_DEPS) \
+    $(patsubst $(SRCDIR)/%.mli,$(BUILDDIR)/%.cmti,$(OCAML_MLI_SRCS))
 
 $(OCAML_MLI_DEPS): private $(OCAMLDEP) := $(OCAMLDEP)
 $(OCAML_MLI_DEPS): $(BUILDDIR)/%.mli.d: $(SRCDIR)/%.mli $(SRCDIR)/.merlin | $(BUILDDIR)
@@ -207,6 +210,8 @@ OCAML_PRODUCTS += \
     $(OCAML_LEX_CMOS) \
     $(patsubst $(SRCDIR)/%.mll,$(BUILDDIR)/%.cmi,$(OCAML_LEX_SRCS))  \
     $(patsubst $(SRCDIR)/%.mll,$(BUILDDIR)/%.o,$(OCAML_LEX_SRCS))    \
+    $(patsubst $(SRCDIR)/%.mll,$(BUILDDIR)/%.cmti,$(OCAML_LEX_SRCS))    \
+    $(patsubst $(SRCDIR)/%.mll,$(BUILDDIR)/%.cmt,$(OCAML_LEX_SRCS))    \
     $(OCAML_LEX_CMXS) \
     $(OCAML_LEX_DEPS)
 
@@ -247,6 +252,8 @@ OCAML_PRODUCTS    += \
     $(OCAML_MENHIR_CMOS) \
     $(OCAML_MENHIR_CMIS) \
     $(patsubst $(SRCDIR)/%.mly,$(BUILDDIR)/%.o,$(OCAML_MENHIR_SRCS)) \
+    $(patsubst $(SRCDIR)/%.mly,$(BUILDDIR)/%.cmti,$(OCAML_MENHIR_SRCS)) \
+    $(patsubst $(SRCDIR)/%.mly,$(BUILDDIR)/%.cmt,$(OCAML_MENHIR_SRCS)) \
     $(OCAML_MENHIR_CMXS) \
     $(OCAML_MENHIR_DEPS)
 

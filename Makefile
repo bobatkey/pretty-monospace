@@ -33,7 +33,10 @@ install: lib/_build/pretty-monospace.cma \
             lib/_build/pretty-monospace.cmxa \
             lib/_build/pretty-monospace.a \
             lib/_build/*.cmi \
-            lib/_build/*.cmx
+            lib/_build/*.cmx \
+            lib/_build/*.cmt \
+            lib/_build/*.cmti \
+            lib/*.mli
 
 uninstall:
 	@ocamlfind remove pretty-monospace
