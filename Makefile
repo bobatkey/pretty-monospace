@@ -18,7 +18,7 @@ doc: doc/index.html doc/style.css
 
 doc/index.html: lib/Pretty.mli
 	mkdir -p doc
-	ocamldoc -html -d doc -css-style style.css lib/Pretty.mli
+	ocamldoc -html -d doc -css-style style.css -short-functors -colorize-code lib/Pretty.mli
 
 doc/style.css: style.css
 	cp $< $@

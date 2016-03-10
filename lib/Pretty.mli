@@ -4,22 +4,30 @@
 
 (**{1 Monospace Pretty Printing}
 
-   A pretty printing library for generating monospaced text with
-   newlines inserted at appropriate points to fit a given screen
-   width.
+   This is a pretty printing library for generating monospaced text
+   with line breaks inserted at appropriate points to fit a given
+   screen width. It is intended for generating nicely formatted and
+   readable source code output or dumps of internal program values.
 
-   The interface of this library is based on Philip Wadler's {i A
-   Prettier Printer}, and Christian Lindig's {i Strictly Pretty}. Some
-   ideas and clarity were extracted from Doaitse Swierstra and Olaf
-   Chitil's {i Linear, Bounded, Functional Pretty-Printing}.
+   The library is structured as a set of combinators (in
+   {!Combinators}) that are used to construct pretty-printer documents
+   (values of type {!document}). Pretty-printer documents can then be
+   rendered to monospaced output devices by the rendering functions
+   listed below.
+
+   The combinator interface of this library is based on Philip
+   Wadler's {i A Prettier Printer}. The implementation is based on
+   Christian Lindig's {i Strictly Pretty}. Some ideas and clarity were
+   extracted from Doaitse Swierstra and Olaf Chitil's {i Linear,
+   Bounded, Functional Pretty-Printing}.
 
    {2 Example: S-Expressions}
 
-   The following code implements a simple pretty-printer for a simple
-   representation of s-expressions.
+   The following code implements a converter from s-expressions to
+   pretty-printer documents.
 
    {[
-     open Pretty.Document
+     open Pretty.Combinators
 
      type sexp = Atom of string | List of sexp list
 
@@ -31,11 +39,80 @@
             group (nest 2 (text "(" ^^ map_join pp_sexp break elems ^^ text ")"))
    ]}
 
+   A pretty-printer document generated from an s-expression (or from
+   anything else) can be rendered to standard output by calling the
+   {!print_endline} function. For example, the OCaml top-level
+   declarations:
+   {[
+     let test =
+       List [ Atom "hello"
+            ; List [Atom "world"; Atom "dsfiuy"]
+            ; List [Atom "sdif"; Atom "dfiu"]
+            ; List [ Atom "kdsfh"
+                   ; Atom "kdsjfh"
+                   ; List [ Atom "dskjfh"
+                          ; Atom "sdkfh"
+                          ; Atom "dskjfh"
+                          ]
+                   ; Atom "kdsjh"
+                   ; List [Atom "kdsjhf"; Atom "oxiv"]
+                   ; Atom "disf"
+                   ]
+            ];;
 
-   {2 Building Pretty-Printer Documents}
-*)
+     Pretty.print_endline (pp_sexp test);;
+   ]}
+   will generate the output:
+   {v
+     (hello
+       (world dsfiuy)
+       (sdif dfiu)
+       (kdsfh kdsjfh (dskjfh sdkfh dskjfh) kdsjh (kdsjhf oxiv) disf))
+   v}
 
-(** Type of pretty-printer documents. *)
+   Line breaks have been inserted between sub-elements of each
+   parenthesised list in an effort to fit the output into 80 columns
+   (the default width). The places where line breaks are inserted
+   corresponds to places were the {!Combinators.break} combinator is
+   used in the construction of the pretty-printing document. In this
+   example, the [pp_sexp] function has placed them between each
+   element of each parenthesised list of s-expressions. Decisions on
+   whether or not to use line breaks or spaces are made for
+   sub-documents of a pretty-printing document delimited by the
+   {!Combinators.group} combinator.
+
+   If we specify a narrower width, the output will be broken
+   differently. The command:
+   {[
+     Pretty.print_endline ~width:40 (pp_sexp test);;
+   ]}
+   produces:
+   {v
+     (hello
+       (world dsfiuy)
+       (sdif dfiu)
+       (kdsfh
+         kdsjfh
+         (dskjfh sdkfh dskjfh)
+         kdsjh
+         (kdsjhf oxiv)
+         disf))
+   v}
+   where different decisions on where to place line breaks has been
+   made, forced by the constraint that the width should be less than
+   40 characters.
+
+   In both cases, the output has been indented. This is the effect of
+   the {!Combinators.nest} combinator, which specifies how much
+   additional indentation is to be inserted after a line break. The
+   library also provides {!Combinators.align} that sets the
+   intentation for the next line break to be the current column. This
+   is useful for aligning items vertically.
+
+   {2 Construction of Pretty-Printer Documents} *)
+
+(** Type of pretty-printer documents. Use the combinators in
+    {!Combinators} to construct values of this type. *)
 type document
 
 (** Combinators for building pretty-printer documents. *)
@@ -48,13 +125,19 @@ module Combinators : sig
      FIXME: the derived combinators
   *)
 
-  (** The abstract type of documents. *)
+  (** The abstract type of documents. This type declaration is here to
+      enable this module to be used as a functor argument. *)
   type t = document
 
   (** {2 Base Combinators}
 
       This section lists the base combinators used to build documents
-      for pretty-printing. *)
+      for pretty-printing.
+
+      The three basic combinators are {!empty}, {!(^^)} and {!text}. 
+
+      
+  *)
 
   (** Concatenation of two documents. Concatenation of documents is
       constant time. *)
@@ -181,10 +264,13 @@ module Combinators : sig
   val join_array : t -> t array -> t
 
   (** [map_join_array pp sep [| x0; x1; ...; xn |]] is equivalent to [pp
-      0 x0 ^^ sep ^^ pp 1 x1 ^^ ... ^^ sep ^^ pp n xn]. *)
+      0 x0 ^^ sep ^^ pp 1 x1 ^^ ... ^^ sep ^^ pp n xn]. 
+
+      It is also equivalent to [join sep (Array.to_list (Array.mapi pp
+      [| x0; x1; ... ; xn |]))].  *)
   val map_join_array : (int -> 'a -> t) -> t -> 'a array -> t
 
-  (** [wrap sep []] is equivalent to {!empty}. [wrap sep (x::xs)] is
+  (** [wrap sep []] is equivalent to [empty]. [wrap sep (x::xs)] is
       equivalent to [join sep (x :: List.map (fun x -> group (break ^^
       x)) xs)]. *)
   val wrap : t -> t list -> t
@@ -195,11 +281,9 @@ module Combinators : sig
 
 (**/**)
   
-  (**{2 Debugging}*)
-
-  (** Generate a string representation of the underlying
-      representation of a pretty-printer document. This is of interest
-      for debugging purposes only. *)
+  (* Generate a string representation of the underlying representation
+     of a pretty-printer document. This is of interest for debugging
+     purposes only. *)
   val to_string : t -> string
 end
 
