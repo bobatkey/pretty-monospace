@@ -1,2 +1,2 @@
-LIB ../lib/_build/pretty-monospace
+LIB pretty-monospace
 MOD test

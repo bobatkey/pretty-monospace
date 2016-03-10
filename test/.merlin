@@ -1,0 +1,6 @@
+S .
+B _build
+S ../lib
+B ../lib/_build
+PKG oUnit
+PKG camlcheck
