@@ -6,7 +6,8 @@ authors: "Robert Atkey <bob.atkey@gmail.com>"
 homepage: ""
 bug-reports: ""
 license: ""
-build: [ "make" ]
+build: [ ["./build-support/setup"]
+         [ "make" ] ]
 install: [ "make" "install" ]
 remove: [ "make" "uninstall" ]
 depends: "ocamlfind" {build}
