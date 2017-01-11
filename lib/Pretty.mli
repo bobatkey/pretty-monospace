@@ -328,7 +328,7 @@ val output : ?width:int -> out_channel -> document -> unit
 val output_endline : ?width:int -> out_channel -> document -> unit
 
 (** Pretty-print a document to a string. *)
-val render : ?width:int -> document -> string
+val render : ?width:int -> old:bool -> document -> string
 
 (** Format a document with custom output functions. *)
 val custom : ?width:int ->

@@ -207,7 +207,14 @@ type document = t
 
 type item = int * [`F|`B] * document
 
+(* The stack switches from `B to `F only once. Can this be exploited
+   to save a bit of space in the items? *)
+
+(* [fits left items] determines whether or not we can fit 'items' up
+   until the next break opportunity into 'left' columns. Running out
+   of items, or a hardbreak, count as break opportunities. *)
 let rec fits left : item list -> bool = function
+  | (_,`F,_)::_                    -> assert false
   | _                when left < 0 -> false
   | []                             -> true
   | (i,_, {node=Empty})::z         -> fits left z
@@ -217,13 +224,13 @@ let rec fits left : item list -> bool = function
   | (i,_, {node=Spaces n})::z      -> fits (left-n) z
   | (i,m, {node=Align x})::z       -> fits left ((i,m,x)::z)
   | (i,m, {node=Nest (j,x)})::z    -> fits left ((i,m,x)::z)
-  | (i,`F,{node=Break s})::z       -> assert false
+(*| (i,`F,{node=Break s})::z       -> assert false*)
   | (i,`B,{node=Break _})::z       -> true
   | (i,_, {node=HardBreak})::z     -> true
-  | (i,`F,{node=AlignSpaces n})::z -> assert false
+(*| (i,`F,{node=AlignSpaces n})::z -> assert false*)
   | (i,`B,{node=AlignSpaces n})::z -> fits (left-n) z
   | (i,`B,{node=Group x})::z       -> fits left ((i,`B,x)::z)
-  | (_,`F,_)::_                    -> assert false
+(*  | (_,`F,_)::_                    -> assert false*)
 
 let format output_text output_newline output_spaces width doc =
   let rec process column = function
@@ -285,12 +292,99 @@ let format output_text output_newline output_spaces width doc =
 
     | (i,_,{node=Group x;flat_width=Some flat_width})::z
       when fits (width-column-flat_width) z ->
+       assert (List.for_all (fun (_,m,_) -> m = `B) z);
        process column ((i,`F,x)::z)
 
     | (i,_,{node=Group x})::z ->
        process column ((i,`B,x)::z)
   in
   process 0 [(0,`B,doc)]
+
+let rec fits left = function
+  | _ when left < 0 -> false
+  | [] -> true
+  | (i,{node=Empty})::z         -> fits left z
+  | (i,{node=Concat (x,y)})::z  -> fits left ((i,x)::(i,y)::z)
+  | (i,{node=Text s})::z        -> fits (left - String.length s) z
+  | (i,{node=Spaces n})::z
+  | (i,{node=AlignSpaces n})::z -> fits (left - n) z
+  | (i,{node=Align x})::z
+  | (i,{node=Nest (_,x)})::z
+  | (i,{node=Group x})::z       -> fits left ((i,x)::z)
+  | (i,{node=Break _})::z
+  | (i,{node=HardBreak})::z     -> true
+
+let flat output_text output_spaces doc =
+  let rec process = function
+    | [] ->
+       ()
+    | {node=Empty}::z ->
+       process z
+    | {node=Concat (x,y)}::z ->
+       process (x::y::z)
+    | {node=Text s; flat_width=Some w}::z ->
+       output_text s;
+       process z
+    | {node=Text _}::z ->
+       assert false
+    | {node=Spaces n}::z ->
+       output_spaces n;
+       process z
+    | {node=Align x|Nest (_,x)|Group x}::z ->
+       process (x::z)
+    | {node=Break s; flat_width=Some w}::z ->
+       output_text s; process z
+    | {node=Break s; flat_width=None}::z ->
+       assert false
+    | {node=HardBreak}::_ ->
+       assert false
+    | {node=AlignSpaces n}::z ->
+       process z
+  in
+  process [doc]
+
+let format_new output_text output_newline output_spaces width doc =
+  let rec process column = function
+    | [] ->
+       ()
+
+    | (i,{node=Empty})::z ->
+       process column z
+
+    | (i,{node=Concat (x,y)})::z ->
+       process column ((i,x)::(i,y)::z)
+
+    | (i,{node=Text s})::z ->
+       output_text s;
+       process (column + String.length s) z
+
+    | (i,{node=Spaces n})::z
+    | (i,{node=AlignSpaces n})::z ->
+       output_spaces n;
+       process (column + n) z
+
+    | (i,{node=Align x})::z ->
+       process column ((column,x)::z)
+
+    | (i,{node=Nest (j,x)})::z ->
+       process column ((i+j,x)::z)
+
+    | (i,{node=Break _})::z
+    | (i,{node=HardBreak})::z ->
+       output_newline ();
+       output_spaces i;
+       process i z
+
+    | (i,{node=Group x; flat_width=Some flat_width})::z
+      when fits (width-column-flat_width) z ->
+       flat output_text output_spaces x;
+       process (column + flat_width) z
+
+    | (i,{node=Group x})::z ->
+       process column ((i,x)::z)
+  in
+  process 0 [(0,doc)]
+
 
 (******************************************************************************)
 let output ?(width=80) ch doc =
@@ -317,9 +411,9 @@ let prerr ?(width=80) doc =
 let prerr_endline ?(width=80) doc =
   output_endline ~width stderr doc
 
-let render ?(width=80) doc =
+let render ?(width=80) ~old doc =
   let b = Buffer.create 2048 in
-  format
+  (if old then format else format_new)
     (fun s  -> Buffer.add_string b s)
     (fun () -> Buffer.add_char b '\n')
     (fun n  -> Buffer.add_string b (String.make n ' '))
