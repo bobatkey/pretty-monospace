@@ -10,6 +10,8 @@ module Combinators = struct
 
         Invariants: if node is [Empty], [Text], [Spaces], or [Break]
         then flat_width is always [Some x] for some [x]. *)
+    ; break_dist : int
+    ; break_type : [`Break|`NoBreak]
     }
 
   and document_node =
@@ -67,6 +69,8 @@ module Combinators = struct
   let empty =
     { node       = Empty
     ; flat_width = Some 0
+    ; break_dist = 0
+    ; break_type = `NoBreak
     }
 
   let (^^) doc1 doc2 =
@@ -76,15 +80,25 @@ module Combinators = struct
       | doc1, doc2 ->
          { node       = Concat (doc1,doc2)
          ; flat_width =
-             match doc1.flat_width, doc2.flat_width with
+             (match doc1.flat_width, doc2.flat_width with
                | None, _ | _, None -> None
-               | Some w1, Some w2  -> Some (w1 + w2)
+               | Some w1, Some w2  -> Some (w1 + w2))
+         ; break_dist =
+             (match doc1.break_type with
+               | `NoBreak -> doc1.break_dist + doc2.break_dist
+               | `Break   -> doc1.break_dist)
+         ; break_type =
+             (match doc1.break_type with
+               | `NoBreak -> doc2.break_type
+               | `Break   -> `Break)
          }
 
   let text s =
     { node       = Text s
     ; flat_width = Some (String.length s)
       (* FIXME: UTF8? use Uucp.Break.tty_width_hint to measure it. *)
+    ; break_dist = String.length s
+    ; break_type = `NoBreak
     }
 
   let nest n doc =
@@ -94,22 +108,30 @@ module Combinators = struct
     else
       { node       = Nest (n, doc)
       ; flat_width = doc.flat_width
+      ; break_dist = doc.break_dist
+      ; break_type = doc.break_type
       }
 
   let hardbreak =
     { node       = HardBreak
     ; flat_width = None
+    ; break_dist = 0
+    ; break_type = `Break
     }
 
   let break_with s =
     { node       = Break s
     ; flat_width = Some (String.length s)
       (* FIXME: UTF8? use Uucp.Break.tty_width_hint to measure it. *)
+    ; break_dist = 0
+    ; break_type = `Break
     }
 
   let group doc =
     { node       = Group doc
     ; flat_width = doc.flat_width
+    ; break_dist = doc.break_dist
+    ; break_type = doc.break_type
     }
 
   let alignment_spaces n =
@@ -119,17 +141,23 @@ module Combinators = struct
     else
       { node       = AlignSpaces n
       ; flat_width = Some 0
+      ; break_dist = n
+      ; break_type = `NoBreak
       }
 
   let align doc =
     { node       = Align doc
     ; flat_width = doc.flat_width
+    ; break_dist = doc.break_dist
+    ; break_type = doc.break_type
     }
 
   (****************************************************************************)
   let break =
     { node       = Break " "
     ; flat_width = Some 1
+    ; break_dist = 0
+    ; break_type = `Break
     }
 
   let spaces n =
@@ -139,6 +167,8 @@ module Combinators = struct
     else
       { node       = Spaces n
       ; flat_width = Some n
+      ; break_dist = n
+      ; break_type = `NoBreak
       }
 
   let space =
@@ -300,90 +330,97 @@ let format output_text output_newline output_spaces width doc =
   in
   process 0 [(0,`B,doc)]
 
+(*
 let rec fits left = function
-  | _ when left < 0 -> false
-  | [] -> true
-  | (i,{node=Empty})::z         -> fits left z
-  | (i,{node=Concat (x,y)})::z  -> fits left ((i,x)::(i,y)::z)
-  | (i,{node=Text s})::z        -> fits (left - String.length s) z
-  | (i,{node=Spaces n})::z
-  | (i,{node=AlignSpaces n})::z -> fits (left - n) z
-  | (i,{node=Align x})::z
-  | (i,{node=Nest (_,x)})::z
-  | (i,{node=Group x})::z       -> fits left ((i,x)::z)
-  | (i,{node=Break _})::z
-  | (i,{node=HardBreak})::z     -> true
+  | _ when left < 0 ->
+     false
+  | (_,{node=Empty})::z ->
+     fits left z
+  | (i,{node=Concat (x,y)})::z ->
+     fits left ((i,x)::(i,y)::z)
+  | (_,{node=Text s})::z ->
+     fits (left - String.length s) z
+  | (_,{node=Spaces n | AlignSpaces n})::z ->
+     fits (left - n) z
+  | (i,{node=Align x | Nest (_,x) | Group x})::z ->
+     fits left ((i,x)::z)
+  | (_,{node=Break _ | HardBreak})::_ | [] ->
+     true
+*)
 
 let flat output_text output_spaces doc =
-  let rec process = function
-    | [] ->
-       ()
-    | {node=Empty}::z ->
-       process z
-    | {node=Concat (x,y)}::z ->
-       process (x::y::z)
-    | {node=Text s; flat_width=Some w}::z ->
-       output_text s;
-       process z
-    | {node=Text _}::z ->
-       assert false
-    | {node=Spaces n}::z ->
-       output_spaces n;
-       process z
-    | {node=Align x|Nest (_,x)|Group x}::z ->
-       process (x::z)
-    | {node=Break s; flat_width=Some w}::z ->
-       output_text s; process z
-    | {node=Break s; flat_width=None}::z ->
-       assert false
-    | {node=HardBreak}::_ ->
-       assert false
-    | {node=AlignSpaces n}::z ->
-       process z
-  in
-  process [doc]
+  let stk = Stack.create () in
+  Stack.push doc stk;
+  while not (Stack.is_empty stk) do
+    match Stack.pop stk with
+      | {node=Empty | AlignSpaces _} ->
+         ()
+      | {node=Concat (x,y)} ->
+         Stack.push y stk;
+         Stack.push x stk
+      | {node=Text s} ->
+         output_text s
+      | {node=Spaces n} ->
+         output_spaces n
+      | {node=Align x | Nest (_,x) | Group x} ->
+         Stack.push x stk
+      | {node=Break s} ->
+         output_text s
+      | {node=HardBreak} ->
+         assert false
+  done
 
 let format_new output_text output_newline output_spaces width doc =
-  let rec process column = function
-    | [] ->
-       ()
-
-    | (i,{node=Empty})::z ->
-       process column z
-
-    | (i,{node=Concat (x,y)})::z ->
-       process column ((i,x)::(i,y)::z)
-
-    | (i,{node=Text s})::z ->
-       output_text s;
-       process (column + String.length s) z
-
-    | (i,{node=Spaces n})::z
-    | (i,{node=AlignSpaces n})::z ->
-       output_spaces n;
-       process (column + n) z
-
-    | (i,{node=Align x})::z ->
-       process column ((column,x)::z)
-
-    | (i,{node=Nest (j,x)})::z ->
-       process column ((i+j,x)::z)
-
-    | (i,{node=Break _})::z
-    | (i,{node=HardBreak})::z ->
-       output_newline ();
-       output_spaces i;
-       process i z
-
-    | (i,{node=Group x; flat_width=Some flat_width})::z
-      when fits (width-column-flat_width) z ->
-       flat output_text output_spaces x;
-       process (column + flat_width) z
-
-    | (i,{node=Group x})::z ->
-       process column ((i,x)::z)
+  let stk = Stack.create () in
+  let push i d =
+    match Stack.top stk with
+      | exception Stack.Empty ->
+         Stack.push (i, d, 0) stk
+      | (_, {break_type=`Break;break_dist}, _) ->
+         Stack.push (i, d, break_dist) stk
+      | (_, {break_type=`NoBreak;break_dist}, k) ->
+         Stack.push (i, d, break_dist+k) stk
   in
-  process 0 [(0,doc)]
+  push 0 doc;
+  let column = ref 0 in
+  while not (Stack.is_empty stk) do
+    match Stack.pop stk with
+      | (i,{node=Empty},_) ->
+         ()
+
+      | (i,{node=Concat (x,y)},_) ->
+         push i y;
+         push i x
+
+      | (i,{node=Text s},_) ->
+         output_text s;
+         column := !column + String.length s
+
+      | (i,{node=Spaces n},_)
+      | (i,{node=AlignSpaces n},_) ->
+         output_spaces n;
+         column := !column + n
+
+      | (i,{node=Align x},_) ->
+         push !column x
+
+      | (i,{node=Nest (j,x)},_) ->
+         push (i+j) x
+
+      | (i,{node=Break _},_)
+      | (i,{node=HardBreak},_) ->
+         output_newline ();
+         output_spaces i;
+         column := i
+
+      | (i,{node=Group x; flat_width=Some flat_width},break_dist)
+        when (width - !column - flat_width) >= break_dist ->
+         flat output_text output_spaces x;
+         column := !column + flat_width
+
+      | (i,{node=Group x},_) ->
+         push i x
+  done
 
 
 (******************************************************************************)
