@@ -260,31 +260,6 @@ let prop_map_join_array =
   =~=
   List.fold_left ( ^^ ) empty (intersperse d ds)
 
-(*
-let prop_int =
-  Property.forall (Domain.int_range (-1000) 1000) @@ fun i ->
-    text (string_of_int i) =~= int i
-
-let prop_bool =
-  Property.forall Domain.bool @@ fun b ->
-    text (if b then "true" else "false") =~= bool b
-
-let prop_unit =
-  text "()" =~= Pretty.Document.unit
-
-let prop_string =
-  Property.forall Domain.(string char) @@ fun s ->
-    text ("\"" ^ String.escaped s ^ "\"") =~= string s
-
-let prop_char =
-  Property.forall Domain.char @@ fun c ->
-    text ("\'" ^ Char.escaped c ^ "\'") =~= char c
-
-let prop_float =
-  Property.forall (Domain.float_range (-2e30) (2e30)) @@ fun f ->
-    text (string_of_float f) =~= float f
-*)
-
 let prop_wrap =
   Property.forall document @@ fun sep ->
   Property.forall (Domain.list document) @@ fun ds ->
@@ -299,41 +274,6 @@ let prop_wrap_array =
   Property.forall (Domain.list document) @@ fun ds ->
   wrap sep ds =~= wrap_array sep (Array.of_list ds)
 
-(*
-let prop_indent =
-  Property.forall document @@ fun d ->
-    Property.forall (Domain.int_range 0 20) @@ fun n ->
-      indent n d =~= spaces n ^^ align d
-*)
-
-(******************************************************************************)
-        (*
-let prop_list =
-  Property.forall (Domain.list document) @@ fun ds ->
-    Linear.list ds =~=
-    group (align (text "["
-                  ^^ alignment_spaces 1
-                  ^^ join (break_with "" ^^ text "; ") ds
-                  ^^ break_with ""
-                  ^^ text "]"))
-
-let prop_tuple =
-  Property.forall (Domain.list document) @@ fun ds ->
-    Linear.tuple ds =~=
-    align (text "("
-           ^^ group (alignment_spaces 1
-                     ^^ join (break_with "" ^^ text ", ") ds
-                     ^^ break_with ""
-                     ^^ text ")"))
-
-let prop_application =
-  Property.forall document @@ fun d ->
-    Property.forall (Domain.list document) @@ fun ds ->
-      application d ds =~=
-      group (align (d ^^ nest 2 (break ^^ join break ds)))
-
-(* FIXME: and the rest... *)
-*)
 (******************************************************************************)
 (* Properties of the combinators on bad input *)
 
@@ -356,14 +296,6 @@ let prop_exn_spaces =
     (Invalid_argument "Pretty.spaces")
     (fun () -> spaces n)
 
-(*
-let prop_exn_indent =
-  Property.forall document @@ fun d ->
-    Property.forall (Domain.int_range (-100) (-1)) @@ fun n ->
-      Property.raises
-        (Invalid_argument "Pretty.indent")
-        (fun () -> indent n d)
-*)
 (******************************************************************************)
 (* Rendering tests *)
 
@@ -474,13 +406,6 @@ let test_alignment_spaces2 () =
     ~width:8
     ~document:(group (text "xxx" ^^ alignment_spaces 3 ^^ text "=" ^^ break ^^ text "yyy"))
     ~expected_output:"xxx= yyy"
-(*
-let test_indent () =
-  check_render
-    ~width:8
-    ~document:(text "xxx" ^^ indent 3 (text "yyy" ^/^ text "zzz"))
-    ~expected_output:"xxx   yyy\n      zzz"
-*)
 
 (* These three tests test that the breaking computation takes into
    account all of the queued print jobs on the current line *)
@@ -549,7 +474,6 @@ let suite =
     ; "break_with2"     >:: test_break_with2
     ; "alignment_spaces1">:: test_alignment_spaces1
     ; "alignment_spaces2">:: test_alignment_spaces2
-    (*      ; "indent"          >:: test_indent*)
     ; "lineleft1"       >:: test_lineleft1
     ; "lineleft2"       >:: test_lineleft2
     ; "lineleft3"       >:: test_lineleft3
@@ -559,7 +483,6 @@ let suite =
     [ "nest"             >: Property.to_test prop_exn_nest
     ; "alignment_spaces" >: Property.to_test prop_exn_alignment_spaces
     ; "spaces"           >: Property.to_test prop_exn_spaces
-      (*      ; "indent"           >: Property.to_test prop_exn_indent*)
     ]
 
   ; "combinator properties" >:::
@@ -601,24 +524,13 @@ let suite =
     ; "map_join"          >: Property.to_test prop_map_join
     ; "join_array"        >: Property.to_test prop_join_array
     ; "map_join_array"    >: Property.to_test prop_map_join_array
-    (*    ; "int"               >: Property.to_test prop_int
-          ; "bool"              >: Property.to_test prop_bool
-          ; "unit"              >: Property.to_test prop_unit
-          ; "string"            >: Property.to_test prop_string
-          ; "char"              >: Property.to_test prop_char
-          ; "float"             >: Property.to_test prop_float
-          ; "list"              >: Property.to_test prop_list
-          ; "tuple"             >: Property.to_test prop_tuple
-          ; "application"       >: Property.to_test prop_application *)
     ; "wrap"              >: Property.to_test prop_wrap
     ; "wrap_array"        >: Property.to_test prop_wrap_array
-      (*    ; "indent"            >: Property.to_test prop_indent *)
     ]
 
   ; "output" >:::
     [ "custom_output"     >: Property.to_test prop_custom_output
     ]
-
   ]
 
 let _ =
