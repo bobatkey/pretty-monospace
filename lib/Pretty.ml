@@ -227,114 +227,6 @@ open Combinators
 
 type document = t
 
-type item = int * [`F|`B] * document
-
-(* The stack switches from `B to `F only once. Can this be exploited
-   to save a bit of space in the items? *)
-
-(* [fits left items] determines whether or not we can fit 'items' up
-   until the next break opportunity into 'left' columns. Running out
-   of items, or a hardbreak, count as break opportunities. *)
-let rec fits left : item list -> bool = function
-  | (_,`F,_)::_                    -> assert false
-  | _                when left < 0 -> false
-  | []                             -> true
-  | (i,_, {node=Empty})::z         -> fits left z
-  | (i,m, {node=Concat (x,y)})::z  -> fits left ((i,m,x)::(i,m,y)::z)
-  | (i,_, {node=Text s;flat_width=Some w})::z -> fits (left-w) z
-  | (_,_, {node=Text _;flat_width=None})::_   -> assert false
-  | (i,m, {node=Align x})::z       -> fits left ((i,m,x)::z)
-  | (i,m, {node=Nest (j,x)})::z    -> fits left ((i,m,x)::z)
-(*| (i,`F,{node=Break s})::z       -> assert false*)
-  | (i,`B,{node=Break _})::z       -> true
-  | (i,_, {node=HardBreak})::z     -> true
-(*| (i,`F,{node=AlignSpaces n})::z -> assert false*)
-  | (i,`B,{node=AlignSpaces n})::z -> fits (left-n) z
-  | (i,`B,{node=Group x})::z       -> fits left ((i,`B,x)::z)
-(*  | (_,`F,_)::_                    -> assert false*)
-
-let format output_text output_newline output_spaces width doc =
-  let rec process column = function
-    | [] ->
-       ()
-
-    | (i,m,{node=Empty})::z ->
-       process column z
-
-    | (i,m,{node=Concat (x,y)})::z ->
-       process column ((i,m,x)::(i,m,y)::z)
-
-    | (i,m,{node=Text s; flat_width=Some w})::z ->
-       output_text s;
-       process (column + w) z
-
-    | (i,m,{node=Text s; flat_width=None})::z ->
-       assert false
-
-    | (i,m,{node=Align x})::z ->
-       process column ((column,m,x)::z)
-
-    | (i,m,{node=Nest (j,x)})::z ->
-       process column ((i+j,m,x)::z)
-
-    | (i,`F,{node=Break s; flat_width=Some w})::z ->
-       output_text s;
-       process (column + w) z
-
-    | (i,`F,{node=Break s; flat_width=None})::z ->
-       assert false
-
-    | (i,`B,{node=Break s})::z ->
-       output_newline ();
-       output_spaces i;
-       process i z
-
-    | (i,`F,{node=HardBreak})::z ->
-       assert false
-
-    | (i,`B,{node=HardBreak})::z ->
-       output_newline ();
-       output_spaces i;
-       process i z
-
-    | (i,`F,{node=AlignSpaces n})::z ->
-       process column z
-
-    | (i,`B,{node=AlignSpaces n})::z ->
-       output_spaces n;
-       process (column + n) z
-
-    | (i,`F,{node=Group x})::z ->
-       process column ((i,`F,x)::z)
-
-    | (i,_,{node=Group x;flat_width=Some flat_width})::z
-      when fits (width-column-flat_width) z ->
-       assert (List.for_all (fun (_,m,_) -> m = `B) z);
-       process column ((i,`F,x)::z)
-
-    | (i,_,{node=Group x})::z ->
-       process column ((i,`B,x)::z)
-  in
-  process 0 [(0,`B,doc)]
-
-(*
-let rec fits left = function
-  | _ when left < 0 ->
-     false
-  | (_,{node=Empty})::z ->
-     fits left z
-  | (i,{node=Concat (x,y)})::z ->
-     fits left ((i,x)::(i,y)::z)
-  | (_,{node=Text s})::z ->
-     fits (left - String.length s) z
-  | (_,{node=AlignSpaces n})::z ->
-     fits (left - n) z
-  | (i,{node=Align x | Nest (_,x) | Group x})::z ->
-     fits left ((i,x)::z)
-  | (_,{node=Break _ | HardBreak})::_ | [] ->
-     true
-*)
-
 let format output_text output_newline output_spaces width doc =
   let (+/) {break_type;break_dist} bd = match break_type with
     | `Break   -> break_dist
@@ -397,9 +289,9 @@ let prerr ?(width=80) doc =
 let prerr_endline ?(width=80) doc =
   output_endline ~width stderr doc
 
-let render ?(width=80) ~old doc =
+let render ?(width=80) doc =
   let b = Buffer.create 2048 in
-  (if old then format else format_new)
+  format
     (fun s  -> Buffer.add_string b s)
     (fun () -> Buffer.add_char b '\n')
     (fun n  -> Buffer.add_string b (String.make n ' '))

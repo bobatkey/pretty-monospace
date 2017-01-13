@@ -112,8 +112,8 @@ let ( =~= ) document1 document2 =
   Property.forall (Domain.int_range 0 200) @@ fun width ->
   Property.forall document_context @@ fun c ->
   Property.equal ~to_string:String.escaped
-    (Pretty.render ~width ~old:false (c @// document1))
-    (Pretty.render ~width ~old:false (c @// document2))
+    (Pretty.render ~width (c @// document1))
+    (Pretty.render ~width (c @// document2))
 
 (****************************************************************************)
 (* Combinator properties *)
@@ -380,7 +380,7 @@ let prop_exn_indent =
 let check_render ~width ~document ~expected_output =
   assert_equal ~printer:String.escaped
     expected_output
-    (Pretty.render ~width ~old:false document)
+    (Pretty.render ~width document)
 
 let test_text () =
   check_render
@@ -542,17 +542,7 @@ let prop_custom_output =
   Property.equal
     ~to_string:String.escaped
     (Buffer.contents b)
-    (Pretty.render ~width:n ~old:false d)
-
-(******************************************************************************)
-(* Tests to check that the old and new algorithms agree *)
-let prop_new_old =
-  Property.forall document @@ fun d ->
-  Property.forall (Domain.int_range 1 100) @@ fun n ->
-  Property.equal
-    ~to_string:String.escaped
-    (Pretty.render ~width:n ~old:true d)
-    (Pretty.render ~width:n ~old:false d)
+    (Pretty.render ~width:n d)
 
 (******************************************************************************)
 let suite =
@@ -646,10 +636,6 @@ let suite =
 
   ; "output" >:::
     [ "custom_output"     >: Property.to_test prop_custom_output
-    ]
-
-  ; "upgrade" >:::
-    [ "old_new"           >: Property.to_test prop_new_old
     ]
 
   ]
