@@ -101,12 +101,20 @@ module Combinators = struct
     if n = 0 then doc
     else if n < 0 then
       invalid_arg (__MODULE__ ^ ".nest")
-    else
-      { node       = Nest (n, doc)
-      ; flat_width = doc.flat_width
-      ; break_dist = doc.break_dist
-      ; break_type = doc.break_type
-      }
+    else match doc.node with
+      | Align _ -> doc
+      | Nest (m, doc) ->
+         { node       = Nest (n+m, doc)
+         ; flat_width = doc.flat_width
+         ; break_dist = doc.break_dist
+         ; break_type = doc.break_type
+         }
+      | _ ->
+         { node       = Nest (n, doc)
+         ; flat_width = doc.flat_width
+         ; break_dist = doc.break_dist
+         ; break_type = doc.break_type
+         }
 
   let hardbreak =
     { node       = HardBreak
@@ -124,11 +132,14 @@ module Combinators = struct
     }
 
   let group doc =
-    { node       = Group doc
-    ; flat_width = doc.flat_width
-    ; break_dist = doc.break_dist
-    ; break_type = doc.break_type
-    }
+    match doc.node with
+      | Group _ -> doc
+      | _ ->
+         { node       = Group doc
+         ; flat_width = doc.flat_width
+         ; break_dist = doc.break_dist
+         ; break_type = doc.break_type
+         }
 
   let alignment_spaces n =
     if n = 0 then empty
@@ -142,11 +153,14 @@ module Combinators = struct
       }
 
   let align doc =
-    { node       = Align doc
-    ; flat_width = doc.flat_width
-    ; break_dist = doc.break_dist
-    ; break_type = doc.break_type
-    }
+    match doc.node with
+      | Align _ -> doc
+      | _ ->
+         { node       = Align doc
+         ; flat_width = doc.flat_width
+         ; break_dist = doc.break_dist
+         ; break_type = doc.break_type
+         }
 
   (****************************************************************************)
   let break =
@@ -243,8 +257,7 @@ let format output_text output_newline output_spaces width doc =
     | {node=Empty} -> column
     | {node=Concat (x,y)} ->
        let column = process column (y +/ bd) i x in
-       let column = process column bd i y in
-       column
+       process column bd i y
     | {node=Text s} ->
        output_text s; column + String.length s
     | {node=AlignSpaces n} ->
