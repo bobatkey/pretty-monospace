@@ -24,11 +24,6 @@ module Combinators = struct
     | Text of string
     (** some text *)
 
-    | Nest of int * document
-    (** format the sub-document with the indentation level incremented
-        by the given amount. The [int] value is always non-zero and
-        positive. *)
-
     | Break of string
     (** the string if the containing group is formatted flat, a
         newline otherwise. *)
@@ -41,8 +36,13 @@ module Combinators = struct
         breaks, the empty string otherwise. The int [n] is always
         non-zero and positive. *)
 
+    | Nest of int * document
+    (** format the sub-document with the indentation level incremented
+        by the given amount. The [int] value is always non-zero and
+        positive. *)
+
     | Align of document
-    (** format the sub-document with the indentation level to the
+    (** format the sub-document with the indentation level set to the
         current column *)
 
     | Group of document
