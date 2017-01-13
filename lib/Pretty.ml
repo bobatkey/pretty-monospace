@@ -5,11 +5,7 @@ module Combinators = struct
     { node       : document_node
     ; flat_width : int
     (** Pre-computed width of this document were it to be formatted
-        without line breaks. [None] if the document contains a hard
-        line break.
-
-        Invariants: if node is [Empty], [Text], [Spaces], or [Break]
-        then flat_width is always [Some x] for some [x]. *)
+        without line breaks. *)
     ; break_dist : int
     ; break_type : [`Break|`NoBreak]
     }
