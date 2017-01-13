@@ -210,7 +210,7 @@ module Combinators : sig
       + [forall d s. group (text s ^^ d) =~= text s ^^ group d]
       + [forall d n. group (nest n d) =~= nest d (group d)]
       + [forall d. group (align d) =~= align (group d)]
-      + [forall d s n. text s ^^ nest n d =~= nest n (test s ^^ d)]
+      + [forall d s n. text s ^^ nest n d =~= nest n (text s ^^ d)]
       + [forall d n1 n2. alignment_spaces n1 ^^ nest n2 d =~= nest n2 (alignment_spaces n1 ^^ d)]
       + [alignment_spaces 0 =~= empty]
       + [forall d s. align (test s ^^ nest (String.length s) d) =~= text s ^^ align d]
