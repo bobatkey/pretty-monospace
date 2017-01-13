@@ -3,7 +3,7 @@
 module Combinators = struct
   type document =
     { node       : document_node
-    ; flat_width : int option
+    ; flat_width : int
     (** Pre-computed width of this document were it to be formatted
         without line breaks. [None] if the document contains a hard
         line break.
@@ -27,9 +27,6 @@ module Combinators = struct
     | Break of string
     (** the string if the containing group is formatted flat, a
         newline otherwise. *)
-
-    | HardBreak
-    (** a mandatory line break. *)
 
     | AlignSpaces of int
     (** [n] spaces if the containing group is formatted with line
@@ -57,14 +54,13 @@ module Combinators = struct
     | Text(t)       -> "Text(\""^String.escaped t^"\")"
     | Nest(n,d)     -> "Nest("^string_of_int n^","^to_string d^")"
     | Break(s)      -> "Break(\""^String.escaped s^"\")"
-    | HardBreak     -> "HardBreak"
     | AlignSpaces i -> "AlignSpaces("^string_of_int i^")"
     | Align d       -> "Align("^to_string d^")"
     | Group d       -> "Group("^to_string d^")"
 
   let empty =
     { node       = Empty
-    ; flat_width = Some 0
+    ; flat_width = 0
     ; break_dist = 0
     ; break_type = `NoBreak
     }
@@ -75,10 +71,7 @@ module Combinators = struct
       | _, {node=Empty} -> doc1
       | doc1, doc2 ->
          { node       = Concat (doc1,doc2)
-         ; flat_width =
-             (match doc1.flat_width, doc2.flat_width with
-               | None, _ | _, None -> None
-               | Some w1, Some w2  -> Some (w1 + w2))
+         ; flat_width = doc1.flat_width + doc2.flat_width
          ; break_dist =
              (match doc1.break_type with
                | `NoBreak -> doc1.break_dist + doc2.break_dist
@@ -91,7 +84,7 @@ module Combinators = struct
 
   let text s =
     { node       = Text s
-    ; flat_width = Some (String.length s)
+    ; flat_width = String.length s
       (* FIXME: UTF8? use Uucp.Break.tty_width_hint to measure it. *)
     ; break_dist = String.length s
     ; break_type = `NoBreak
@@ -116,16 +109,9 @@ module Combinators = struct
          ; break_type = doc.break_type
          }
 
-  let hardbreak =
-    { node       = HardBreak
-    ; flat_width = None
-    ; break_dist = 0
-    ; break_type = `Break
-    }
-
   let break_with s =
     { node       = Break s
-    ; flat_width = Some (String.length s)
+    ; flat_width = String.length s
       (* FIXME: UTF8? use Uucp.Break.tty_width_hint to measure it. *)
     ; break_dist = 0
     ; break_type = `Break
@@ -147,7 +133,7 @@ module Combinators = struct
       invalid_arg (__MODULE__ ^ ".alignment_spaces")
     else
       { node       = AlignSpaces n
-      ; flat_width = Some 0
+      ; flat_width = 0
       ; break_dist = n
       ; break_type = `NoBreak
       }
@@ -165,7 +151,7 @@ module Combinators = struct
   (****************************************************************************)
   let break =
     { node       = Break " "
-    ; flat_width = Some 1
+    ; flat_width = 1
     ; break_dist = 0
     ; break_type = `Break
     }
@@ -183,8 +169,6 @@ module Combinators = struct
   let (^+^) x y = x ^^ text " " ^^ y
 
   let (^/^) x y = x ^^ break ^^ y
-
-  let (^//^) x y = x ^^ hardbreak ^^ y
 
   let join sep list =
     let i = ref 0 in
@@ -251,7 +235,6 @@ let format output_text output_newline output_spaces width doc =
     | {node=Concat (x,y)}                   -> flat x; flat y
     | {node=Text s | Break s}               -> output_text s
     | {node=Align x | Nest (_,x) | Group x} -> flat x
-    | {node=HardBreak}                      -> assert false
   in
   let rec process column bd i = function
     | {node=Empty} -> column
@@ -266,14 +249,14 @@ let format output_text output_newline output_spaces width doc =
        process column bd column x
     | {node=Nest (j, x)} ->
        process column bd (i+j) x
-    | {node=Break _ | HardBreak} ->
+    | {node=Break _} ->
        output_newline (); output_spaces i; i
-    | {node=Group x; flat_width=Some flat_width}
-      when (width - column - flat_width) >= bd ->
-       flat x;
-       column + flat_width
-    | {node=Group x} ->
-       process column bd i x
+    | {node=Group x; flat_width} ->
+       if width - column - flat_width >= bd then
+         (flat x;
+          column + flat_width)
+       else
+         process column bd i x
   in
   ignore (process 0 0 0 doc)
 

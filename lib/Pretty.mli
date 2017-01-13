@@ -159,11 +159,6 @@ module Combinators : sig
       (['\n']) or tab characters (['\t']). See also {!break}. *)
   val break_with : string -> t
 
-  (** A break that always renders as a newline plus indentation. Any
-      group that contains a [hardbreak] is forced to render with line
-      breaks. *)
-  val hardbreak : t
-
   (** [alignment_spaces n] renders as [n] spaces if the enclosing group
       is formatted {i with} line breaks, and acts the same as {!empty}
       otherwise. The int [n] must be greater than [0], otherwise an
@@ -220,7 +215,6 @@ module Combinators : sig
       + [forall n. nest n empty =~= empty]
       + [align empty =~= empty]
       + [forall d. group (group d) =~= group d]
-      + [forall c. group (c[hardbreak]) =~= c[hardbreak]] 
 
       {2 Derived Combinators} 
 
@@ -247,9 +241,6 @@ module Combinators : sig
 
   (** [x ^/^ y] is equivalent to [x ^^ break ^^ y]. *)
   val ( ^/^ ) : t -> t -> t
-
-  (** [x ^//^ y] is equivalent to [x ^^ hardbreak ^^ y]. *)
-  val ( ^//^ ) : t -> t -> t
 
   (** [join sep [x0; x1; ...; xn]] is equivalent to [x0 ^^ sep ^^ x1
       ^^ ... ^^ sep ^^ xn]. *)

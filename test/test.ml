@@ -20,11 +20,10 @@ let document_generator depth =
   let open Generator in
   let rec make depth =
     if depth = 0 then
-      int 4 >>= function
+      int 3 >>= function
       | 0 -> return empty
       | 1 -> text <$> Domain.to_generator Domain.printable_ascii_string
       | 2 -> return break (* with? *)
-      | 3 -> return hardbreak
       | _ -> assert false
     else
       int 5 >>= function
@@ -212,10 +211,6 @@ let prop_group_group =
   Property.forall document @@ fun d ->
   group (group d) =~= group d
 
-let prop_group_hardbreak =
-  Property.forall document_context @@ fun c ->
-  group (c @// hardbreak) =~= c @// hardbreak
-
 (******************************************************************************)
 (* Check the derived combinators *)
 let prop_break_with =
@@ -237,11 +232,6 @@ let prop_append_break =
   Property.forall document @@ fun d1 ->
   Property.forall document @@ fun d2 ->
   d1 ^^ break ^^ d2 =~= d1 ^/^ d2
-
-let prop_append_hardbreak =
-  Property.forall document @@ fun d1 ->
-  Property.forall document @@ fun d2 ->
-  d1 ^^ hardbreak ^^ d2 =~= d1 ^//^ d2
 
 let prop_join =
   Property.forall (Domain.list document) @@ fun ds ->
@@ -400,12 +390,6 @@ let test_empty () =
     ~document:empty
     ~expected_output:""
 
-let test_hardbreak () =
-  check_render
-    ~width:80
-    ~document:(text "xxx" ^^ hardbreak ^^ text "yyy")
-    ~expected_output:"xxx\nyyy"
-
 let test_break1 () =
   check_render
     ~width:80
@@ -553,7 +537,6 @@ let suite =
     ; "empty"           >:: test_empty
     ; "break1"          >:: test_break1
     ; "break2"          >:: test_break2
-    ; "hardbreak"       >:: test_hardbreak
     ; "nest1"           >:: test_nest1
     ; "nest2"           >:: test_nest2
     ; "nest3"           >:: test_nest3
@@ -606,7 +589,6 @@ let suite =
     ; "group_text"        >: Property.to_test prop_group_text
     ; "group_empty"       >: Property.to_test prop_group_empty
     ; "group_group"       >: Property.to_test prop_group_group
-    ; "group_hardbreak"   >: Property.to_test prop_group_hardbreak
     ]
 
   ; "derived combinator properties" >:::
@@ -615,7 +597,6 @@ let suite =
     ; "space"             >: Property.to_test prop_space
     ; "append_space"      >: Property.to_test prop_append_space
     ; "append_break"      >: Property.to_test prop_append_break
-    ; "append_hardbreak"  >: Property.to_test prop_append_hardbreak
     ; "join"              >: Property.to_test prop_join
     ; "map_join"          >: Property.to_test prop_map_join
     ; "join_array"        >: Property.to_test prop_join_array
