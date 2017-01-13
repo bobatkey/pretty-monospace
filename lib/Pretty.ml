@@ -24,9 +24,6 @@ module Combinators = struct
     | Text of string
     (** some text *)
 
-    | Spaces of int
-    (** [n] spaces, where [n] is always non-zero and positive. *)
-
     | Nest of int * document
     (** format the sub-document with the indentation level incremented
         by the given amount. The [int] value is always non-zero and
@@ -58,7 +55,6 @@ module Combinators = struct
     | Empty         -> "Empty"
     | Concat(d1,d2) -> "Concat(" ^ to_string d1 ^ "," ^ to_string d2 ^ ")"
     | Text(t)       -> "Text(\""^String.escaped t^"\")"
-    | Spaces i      -> "Spaces("^string_of_int i^")"
     | Nest(n,d)     -> "Nest("^string_of_int n^","^to_string d^")"
     | Break(s)      -> "Break(\""^String.escaped s^"\")"
     | HardBreak     -> "HardBreak"
@@ -165,11 +161,7 @@ module Combinators = struct
     else if n < 0 then
       invalid_arg (__MODULE__ ^ ".spaces")
     else
-      { node       = Spaces n
-      ; flat_width = Some n
-      ; break_dist = n
-      ; break_type = `NoBreak
-      }
+      text (String.make n ' ')
 
   let space =
     spaces 1
@@ -251,7 +243,6 @@ let rec fits left : item list -> bool = function
   | (i,m, {node=Concat (x,y)})::z  -> fits left ((i,m,x)::(i,m,y)::z)
   | (i,_, {node=Text s;flat_width=Some w})::z -> fits (left-w) z
   | (_,_, {node=Text _;flat_width=None})::_   -> assert false
-  | (i,_, {node=Spaces n})::z      -> fits (left-n) z
   | (i,m, {node=Align x})::z       -> fits left ((i,m,x)::z)
   | (i,m, {node=Nest (j,x)})::z    -> fits left ((i,m,x)::z)
 (*| (i,`F,{node=Break s})::z       -> assert false*)
@@ -279,10 +270,6 @@ let format output_text output_newline output_spaces width doc =
 
     | (i,m,{node=Text s; flat_width=None})::z ->
        assert false
-
-    | (i,m,{node=Spaces n})::z ->
-       output_spaces n;
-       process (column + n) z
 
     | (i,m,{node=Align x})::z ->
        process column ((column,m,x)::z)
@@ -340,7 +327,7 @@ let rec fits left = function
      fits left ((i,x)::(i,y)::z)
   | (_,{node=Text s})::z ->
      fits (left - String.length s) z
-  | (_,{node=Spaces n | AlignSpaces n})::z ->
+  | (_,{node=AlignSpaces n})::z ->
      fits (left - n) z
   | (i,{node=Align x | Nest (_,x) | Group x})::z ->
      fits left ((i,x)::z)
@@ -348,80 +335,42 @@ let rec fits left = function
      true
 *)
 
-let flat output_text output_spaces doc =
-  let stk = Stack.create () in
-  Stack.push doc stk;
-  while not (Stack.is_empty stk) do
-    match Stack.pop stk with
-      | {node=Empty | AlignSpaces _} ->
-         ()
-      | {node=Concat (x,y)} ->
-         Stack.push y stk;
-         Stack.push x stk
-      | {node=Text s} ->
-         output_text s
-      | {node=Spaces n} ->
-         output_spaces n
-      | {node=Align x | Nest (_,x) | Group x} ->
-         Stack.push x stk
-      | {node=Break s} ->
-         output_text s
-      | {node=HardBreak} ->
-         assert false
-  done
-
-let format_new output_text output_newline output_spaces width doc =
-  let stk = Stack.create () in
-  let push i d =
-    match Stack.top stk with
-      | exception Stack.Empty ->
-         Stack.push (i, d, 0) stk
-      | (_, {break_type=`Break;break_dist}, _) ->
-         Stack.push (i, d, break_dist) stk
-      | (_, {break_type=`NoBreak;break_dist}, k) ->
-         Stack.push (i, d, break_dist+k) stk
+let format output_text output_newline output_spaces width doc =
+  let (+/) {break_type;break_dist} bd = match break_type with
+    | `Break   -> break_dist
+    | `NoBreak -> break_dist + bd
   in
-  push 0 doc;
-  let column = ref 0 in
-  while not (Stack.is_empty stk) do
-    match Stack.pop stk with
-      | (i,{node=Empty},_) ->
-         ()
-
-      | (i,{node=Concat (x,y)},_) ->
-         push i y;
-         push i x
-
-      | (i,{node=Text s},_) ->
-         output_text s;
-         column := !column + String.length s
-
-      | (i,{node=Spaces n},_)
-      | (i,{node=AlignSpaces n},_) ->
-         output_spaces n;
-         column := !column + n
-
-      | (i,{node=Align x},_) ->
-         push !column x
-
-      | (i,{node=Nest (j,x)},_) ->
-         push (i+j) x
-
-      | (i,{node=Break _},_)
-      | (i,{node=HardBreak},_) ->
-         output_newline ();
-         output_spaces i;
-         column := i
-
-      | (i,{node=Group x; flat_width=Some flat_width},break_dist)
-        when (width - !column - flat_width) >= break_dist ->
-         flat output_text output_spaces x;
-         column := !column + flat_width
-
-      | (i,{node=Group x},_) ->
-         push i x
-  done
-
+  let rec flat = function
+    | {node=Empty | AlignSpaces _}          -> ()
+    | {node=Concat (x,y)}                   -> flat x; flat y
+    | {node=Text s | Break s}               -> output_text s
+    | {node=Align x | Nest (_,x) | Group x} -> flat x
+    | {node=HardBreak}                      -> assert false
+  in
+  let rec process column bd i = function
+    | {node=Empty} -> column
+    | {node=Concat (x,y)} ->
+       let column = process column (y +/ bd) i x in
+       let column = process column bd i y in
+       column
+    | {node=Text s} ->
+       output_text s; column + String.length s
+    | {node=AlignSpaces n} ->
+       output_spaces n; column + n
+    | {node=Align x} ->
+       process column bd column x
+    | {node=Nest (j, x)} ->
+       process column bd (i+j) x
+    | {node=Break _ | HardBreak} ->
+       output_newline (); output_spaces i; i
+    | {node=Group x; flat_width=Some flat_width}
+      when (width - column - flat_width) >= bd ->
+       flat x;
+       column + flat_width
+    | {node=Group x} ->
+       process column bd i x
+  in
+  ignore (process 0 0 0 doc)
 
 (******************************************************************************)
 let output ?(width=80) ch doc =
