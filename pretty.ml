@@ -35,16 +35,18 @@ module Pretty : sig
   val text        : t -> string -> unit
   val start_group : t -> unit
   val end_group   : t -> unit
-  val break       : t -> unit
+  val break       : t -> string -> unit
+  val alignment_spaces : t -> int -> unit
   val start_nest  : t -> int -> unit
   val end_nest    : t -> unit
+  val start_align : t -> unit
+  val end_align   : t -> unit
   val finish      : t -> unit
 end = struct
 
   type group_status =
-    | TooFar
-    | Fixed of int
-    | Measuring of int
+    | Measuring of { start_pos : int }
+    | Measured  of { width     : int }
 
   type event =
     | Text of string
@@ -52,7 +54,9 @@ end = struct
     | Start_group of group_status ref
     | End_group
 
-    | Break
+    | Break of string
+    | Alignment_spaces of int
+
     | Start_nest of int
     | End_nest
     | Start_align
@@ -60,19 +64,21 @@ end = struct
 
   type t =
     { queue            : event Queue.t
+    (** queue of events that are waiting, pending the resolution of
+        group sizes *)
 
     (* configuration *)
     ; width            : int
 
     (* measurement *)
+    ; mutable pos      : int (** the absolute position in the input, if
+                                 everything was flat. *)
     ; open_groups      : group_status ref CCDeque.t
-    (* FIXME: could get rid of this second queue if we dynamically
-       extended the extent of all groups to cover all trailing text (see
-       Chitil's paper) *)
     ; closed_groups    : group_status ref Queue.t
 
-    (* layout variables *)
-    ; mutable flat     : int (* number of 'start_group's we are nested in, in flat mode *)
+    (* layout state *)
+    ; mutable flat     : int (* number of 'start_group's we are
+                                nested in, in flat mode *)
     ; mutable column   : int
     ; mutable indent   : int
     ;         indents  : int Stack.t
@@ -80,6 +86,7 @@ end = struct
 
   let init width =
     { queue         = Queue.create ()
+    ; pos           = 0
     ; open_groups   = CCDeque.create ()
     ; closed_groups = Queue.create ()
     ; width
@@ -88,6 +95,9 @@ end = struct
     ; indent        = 0
     ; indents       = Stack.create ()
     }
+
+  (* FIXME: provide an API that just sends the measured groups and so
+     on to another process to process them. *)
 
   let layout st =
     (* whenever we get stuck in layout, the head of the queue will
@@ -99,9 +109,9 @@ end = struct
        the last overflow check, or now have fixed measures instead of
        dynamically checking them. *)
     let is_live = function
-      | Text _ | Break | End_group
+      | Text _ | Break _ | End_group | Alignment_spaces _
       | Start_nest _ | End_nest | Start_align | End_align
-      | Start_group {contents=TooFar | Fixed _} -> true
+      | Start_group {contents=Measured _}  -> true
       | Start_group {contents=Measuring _} -> false
     in
     while not (Queue.is_empty st.queue) && is_live (Queue.peek st.queue) do
@@ -111,23 +121,27 @@ end = struct
            st.column <- st.column + String.length s
         | Start_group {contents=Measuring _} ->
            assert false
-        | Start_group {contents=TooFar} ->
-           assert (st.flat = 0)
-        | Start_group {contents=Fixed w} when st.flat > 0 ->
+        | Start_group {contents=Measured _} when st.flat > 0 ->
            st.flat <- st.flat + 1
-        | Start_group {contents=Fixed w} when st.column + w <= st.width ->
+        | Start_group {contents=Measured {width}}
+          when st.column + width <= st.width ->
            st.flat <- 1
-        | Start_group {contents=Fixed w} ->
+        | Start_group {contents=Measured _} ->
            ()
         | End_group ->
            if st.flat > 0 then st.flat <- st.flat - 1
-        | Break ->
+        | Break s ->
            if st.flat = 0 then
              (print_newline ();
               print_string (String.make st.indent ' ');
               st.column <- st.indent)
            else
-             print_string " "
+             (print_string s;
+              st.column <- st.column + String.length s)
+        | Alignment_spaces i ->
+           if st.flat = 0 then
+             print_string (String.make i ' ')
+           else ()
         | Start_nest i ->
            Stack.push st.indent st.indents;
            st.indent <- st.indent + i
@@ -136,14 +150,19 @@ end = struct
            st.indent <- st.column
         | End_nest | End_align ->
            (match Stack.pop st.indents with
-             | exception Stack.Empty -> failwith "badly nested nests"
+             | exception Stack.Empty -> failwith "badly nested nests or aligns"
              | i -> st.indent <- i)
     done
 
+  let fix_measure st r = match !r with
+    | Measured _ -> assert false
+    | Measuring {start_pos} ->
+       r := Measured {width = st.pos - start_pos}
+  
   let evict_overflowed_groups st =
     let overflowing r = match !r with
-      | TooFar | Fixed _ -> assert false
-      | Measuring i -> i > st.width
+      | Measured _            -> assert false
+      | Measuring {start_pos} -> st.pos - start_pos > st.width
     in
     (* We rely on the invariant that
        - everything in the measuring queues is [Measuring]
@@ -152,41 +171,36 @@ end = struct
     while not (Queue.is_empty st.closed_groups)
           && overflowing (Queue.peek st.closed_groups)
     do
-      Queue.take st.closed_groups := TooFar
+      fix_measure st (Queue.take st.closed_groups)
     done;
     while not (CCDeque.is_empty st.open_groups)
           && overflowing (CCDeque.peek_front st.open_groups)
     do
-      CCDeque.take_front st.open_groups := TooFar
+      fix_measure st (CCDeque.take_front st.open_groups)
     done
   (* invariant: if we evict any open_groups, then we must have already
      evicted all the closed_groups. *)
-  
-  (* We could just keep a count of how many open groups we need to
-     process now, and then run layout to process them. *)
+  (* conjecture: all the pruned groups occur in the order they appear
+     in the queue, so we can just count the number of evicted groups,
+     and step that far forwards in the queue of pending events. This
+     would avoid the need for the reference too. When we evict a group
+     from the *)
 
-  let increment_by i r = match !r with
-    | TooFar | Fixed _ -> assert false
-    | Measuring j      -> r := Measuring (i+j)
-    
   let text st txt =
-    if String.length txt > 0 then begin
+    let width = String.length txt in
+    if width > 0 then begin
       (* FIXME: if the item at the head of the queue is a start_group,
          then switch the order. This reduces the latency of the
          printer so that text is always output immediately if we
          aren't waiting for a decision on a line break. *)
       Queue.push (Text txt) st.queue;
-      let w = String.length txt in
-      (* is there a way of doing this that isn't linear in the nesting
-         depth/dynamic extent of groups? *)
-      CCDeque.iter (increment_by w) st.open_groups;
-      Queue.iter (increment_by w) st.closed_groups;
+      st.pos <- st.pos + width;
       evict_overflowed_groups st;
       layout st
     end
 
   let start_group st =
-    let measure = ref (Measuring 0) in
+    let measure = ref (Measuring {start_pos = st.pos}) in
     Queue.push (Start_group measure) st.queue;
     CCDeque.push_back st.open_groups measure
 
@@ -198,28 +212,30 @@ end = struct
       let measurer = CCDeque.take_back st.open_groups in
       Queue.push measurer st.closed_groups
 
-  let fix_measure r = match !r with
-    | TooFar | Fixed _ -> assert false
-    | Measuring i -> r := Fixed i
+  (* [flush_closed_groups] sets the final measurement for all unpruned
+     groups in the input stream. *)
+  let flush_closed_groups st =
+    while not (Queue.is_empty st.closed_groups) do
+      fix_measure st (Queue.take st.closed_groups)
+    done
 
-  let break st =
-    Queue.push Break st.queue;
-    Queue.iter fix_measure st.closed_groups;
-    Queue.clear st.closed_groups;
-    CCDeque.iter (increment_by 1) st.open_groups;
+  let break st txt =
+    flush_closed_groups st;
+    Queue.push (Break txt) st.queue;
+    st.pos <- st.pos + String.length txt;
     evict_overflowed_groups st;
     layout st
 
   let finish st =
+    (* FIXME: alternative is to silently close all the open groups *)
     assert (CCDeque.is_empty st.open_groups);
-    Queue.iter fix_measure st.closed_groups;
-    Queue.clear st.closed_groups;
+    flush_closed_groups st;
     layout st;
     assert (Queue.is_empty st.queue)
 
   let start_nest st i =
     (* FIXME: keep track of the nesting of 'nest's, 'align's and
-       'group's to spot errors. *)
+       'group's to spot user errors. *)
     Queue.push (Start_nest i) st.queue
 
   let end_nest st =
@@ -228,8 +244,11 @@ end = struct
   let start_align st =
     Queue.push Start_align st.queue
 
-  let end_align =
-    Queue.push End_align
+  let end_align st =
+    Queue.push End_align st.queue
+
+  let alignment_spaces st i =
+    Queue.push (Alignment_spaces i) st.queue
 end
 
 module Document = struct
@@ -237,9 +256,11 @@ module Document = struct
     | Emp
     | Concat of t * t
     | Text of string
-    | Break
+    | Break of string
+    | Alignment_spaces of int
     | Group of t
     | Nest of int * t
+    | Align of t
 
   let render width doc =
     let pp = Pretty.init width in
@@ -247,7 +268,8 @@ module Document = struct
       | Emp -> ()
       | Concat (x, y) -> render x; render y
       | Text s        -> Pretty.text pp s
-      | Break         -> Pretty.break pp
+      | Break s       -> Pretty.break pp s
+      | Alignment_spaces i -> Pretty.alignment_spaces pp i
       | Group x ->
          Pretty.start_group pp;
          render x;
@@ -256,6 +278,10 @@ module Document = struct
          Pretty.start_nest pp i;
          render x;
          Pretty.end_nest pp
+      | Align x ->
+         Pretty.start_align pp;
+         render x;
+         Pretty.end_align pp
     in
     render doc;
     Pretty.finish pp
@@ -263,16 +289,17 @@ module Document = struct
   let empty = Emp
   let (^^) x y = Concat (x, y)
   let text s = Text s
-  let break = Break
+  let break s = Break s
   let group x = Group x
   let nest i x = Nest (i,x)
-  let (^/^) x y = x ^^ break ^^ y
+  let (^/^) x y = x ^^ break " " ^^ y
+  let alignment_spaces i = Alignment_spaces i
 end
 
 let test_lineleft_doc =
   Document.(group
     (text "begin"
-     ^^ nest 3 (break
+     ^^ nest 3 (break " "
                 ^^ group (text "stmt;"
                           ^/^ text "stmt;"
                           ^/^ text "stmt;"))
@@ -281,7 +308,7 @@ let test_lineleft_doc =
 let test_lineleft_doc2 =
   Document.(group
     (text "begin"
-     ^^ nest 3 (break
+     ^^ nest 3 (break " "
                 ^^ group (text "stmt;"
                           ^/^ text "stmt;"
                           ^/^ text "stmt;"))
@@ -300,6 +327,9 @@ let nest i f pp =
 let text s pp =
   Pretty.text pp s
 
+let break pp =
+  Pretty.break pp " "
+
 let (^^) f g pp =
   f pp;
   g pp
@@ -312,15 +342,15 @@ let test w =
     begin
       text "1"
       ^^
-      Pretty.break
+      break
       ^^
       text "2"
       ^^
-      Pretty.break
+      break
       ^^
       text "3"
       ^^
-      Pretty.break
+      break
       ^^
       text "4"
     end)
