@@ -44,9 +44,10 @@ module Pretty : sig
   val finish      : t -> unit
 end = struct
 
-  type group_status =
-    | Measuring of { start_pos : int }
-    | Measured  of { width     : int }
+  type group_status = int
+  (** a group_status is negative if it is still being measured *)
+                    (*| Measuring of { start_pos : int }
+                      | Measured  of { width     : int }*)
 
   type event =
     | Text of string
@@ -86,7 +87,7 @@ end = struct
 
   let init width =
     { queue         = Queue.create ()
-    ; pos           = 0
+    ; pos           = 1 (* count from 1 so we can represent measuring tasks by negative numbers and not get confused by 0-width groups *)
     ; open_groups   = CCDeque.create ()
     ; closed_groups = Queue.create ()
     ; width
@@ -109,24 +110,19 @@ end = struct
        the last overflow check, or now have fixed measures instead of
        dynamically checking them. *)
     let is_live = function
-      | Text _ | Break _ | End_group | Alignment_spaces _
-      | Start_nest _ | End_nest | Start_align | End_align
-      | Start_group {contents=Measured _}  -> true
-      | Start_group {contents=Measuring _} -> false
+      | Start_group {contents} when contents < 0 -> false
+      | _ -> true
     in
     while not (Queue.is_empty st.queue) && is_live (Queue.peek st.queue) do
       match Queue.take st.queue with
         | Text s ->
            print_string s;
            st.column <- st.column + String.length s
-        | Start_group {contents=Measuring _} ->
-           assert false
-        | Start_group {contents=Measured _} when st.flat > 0 ->
+        | Start_group _ when st.flat > 0 ->
            st.flat <- st.flat + 1
-        | Start_group {contents=Measured {width}}
-          when st.column + width <= st.width ->
+        | Start_group {contents=width} when st.column + width <= st.width ->
            st.flat <- 1
-        | Start_group {contents=Measured _} ->
+        | Start_group _ ->
            ()
         | End_group ->
            if st.flat > 0 then st.flat <- st.flat - 1
@@ -141,7 +137,6 @@ end = struct
         | Alignment_spaces i ->
            if st.flat = 0 then
              print_string (String.make i ' ')
-           else ()
         | Start_nest i ->
            Stack.push st.indent st.indents;
            st.indent <- st.indent + i
@@ -154,20 +149,11 @@ end = struct
              | i -> st.indent <- i)
     done
 
-  let fix_measure st r = match !r with
-    | Measured _ -> assert false
-    | Measuring {start_pos} ->
-       r := Measured {width = st.pos - start_pos}
-  
+  let fix_measure st r =
+    r := st.pos + !r
+
   let evict_overflowed_groups st =
-    let overflowing r = match !r with
-      | Measured _            -> assert false
-      | Measuring {start_pos} -> st.pos - start_pos > st.width
-    in
-    (* We rely on the invariant that
-       - everything in the measuring queues is [Measuring]
-       - the elements are in ascending order
-    *)
+    let overflowing r = st.pos + !r > st.width in
     while not (Queue.is_empty st.closed_groups)
           && overflowing (Queue.peek st.closed_groups)
     do
@@ -200,7 +186,7 @@ end = struct
     end
 
   let start_group st =
-    let measure = ref (Measuring {start_pos = st.pos}) in
+    let measure = ref (- st.pos) in
     Queue.push (Start_group measure) st.queue;
     CCDeque.push_back st.open_groups measure
 
@@ -213,7 +199,8 @@ end = struct
       Queue.push measurer st.closed_groups
 
   (* [flush_closed_groups] sets the final measurement for all unpruned
-     groups in the input stream. *)
+     groups in the input stream. There may still be unfinished outer
+     groups, so we cannot yet necessarily print these groups. *)
   let flush_closed_groups st =
     while not (Queue.is_empty st.closed_groups) do
       fix_measure st (Queue.take st.closed_groups)
