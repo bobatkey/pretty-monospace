@@ -97,8 +97,9 @@ end = struct
     ; indents       = Stack.create ()
     }
 
-  (* FIXME: provide an API that just sends the measured groups and so
-     on to another process to process them. *)
+  (* FIXME: provide an API that just sends the measured groups and
+     other events to another process to process them. Could be generic
+     in what the other events are. *)
 
   let layout st =
     (* whenever we get stuck in layout, the head of the queue will
@@ -145,7 +146,8 @@ end = struct
            st.indent <- st.column
         | End_nest | End_align ->
            (match Stack.pop st.indents with
-             | exception Stack.Empty -> failwith "badly nested nests or aligns"
+             | exception Stack.Empty ->
+                failwith "badly nested nests or aligns"
              | i -> st.indent <- i)
     done
 
@@ -164,13 +166,11 @@ end = struct
     do
       fix_measure st (CCDeque.take_front st.open_groups)
     done
-  (* invariant: if we evict any open_groups, then we must have already
-     evicted all the closed_groups. *)
   (* conjecture: all the pruned groups occur in the order they appear
      in the queue, so we can just count the number of evicted groups,
      and step that far forwards in the queue of pending events. This
-     would avoid the need for the reference too. When we evict a group
-     from the *)
+     would avoid the need for the reference too. TODO: I'm pretty sure
+     this isn't true. *)
 
   let text st txt =
     let width = String.length txt in
@@ -235,6 +235,9 @@ end = struct
     Queue.push End_align st.queue
 
   let alignment_spaces st i =
+    (* FIXME: this doesn't quite work: we need to add [i] to the
+       widths of all the currently closed groups, but not include the
+       measurement in the currently open groups. *)
     Queue.push (Alignment_spaces i) st.queue
 end
 
