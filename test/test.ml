@@ -174,6 +174,12 @@ let prop_nest_text =
   Property.forall (Domain.int_range 0 24) @@ fun n ->
   text s ^^ nest n d =~= nest n (text s ^^ d)
 
+let prop_text_nest =
+  Property.forall document @@ fun d ->
+  Property.forall Domain.printable_ascii_string @@ fun s ->
+  Property.forall (Domain.int_range 0 24) @@ fun n ->
+  nest n d ^^ text s =~= nest n (d ^^ text s)
+
 let prop_nest_alignment_spaces =
   Property.forall document @@ fun d ->
   Property.forall (Domain.int_range 0 40) @@ fun n1 ->
@@ -182,6 +188,11 @@ let prop_nest_alignment_spaces =
 
 let prop_alignment_spaces_empty =
   alignment_spaces 0 =~= empty
+
+let prop_alignment_spaces_add =
+  Property.forall (Domain.int_range 0 40) @@ fun n1 ->
+  Property.forall (Domain.int_range 0 40) @@ fun n2 ->
+  alignment_spaces n1 ^^ alignment_spaces n2 =~= alignment_spaces (n1 + n2)
 
 let prop_align_text =
   Property.forall document @@ fun d ->
@@ -494,6 +505,7 @@ let suite =
     ; "text_empty"        >: Property.to_test prop_text_empty
 
     ; "nest_text"         >: Property.to_test prop_nest_text
+    ; "text_nest"         >: Property.to_test prop_text_nest
     ; "nest_empty"        >: Property.to_test prop_nest_empty
     ; "nest_group"        >: Property.to_test prop_nest_group
     ; "zero_nest"         >: Property.to_test prop_zero_nest
@@ -501,6 +513,7 @@ let suite =
     ; "nest_alignment_spaces">: Property.to_test prop_nest_alignment_spaces
 
     ; "alignment_spaces_empty">: Property.to_test prop_alignment_spaces_empty
+    ; "alignment_spaces_add" >: Property.to_test prop_alignment_spaces_add
 
     ; "align_empty"       >: Property.to_test prop_align_empty
     ; "align_text"        >: Property.to_test prop_align_text
