@@ -45,9 +45,6 @@ module PrettyStream : sig
 end = struct
 
   type group_status = int
-  (** a group_status is negative if it is still being measured *)
-                    (*| Measuring of { start_pos : int }
-                      | Measured  of { width     : int }*)
 
   type event =
     | Text of string
@@ -154,26 +151,36 @@ end = struct
              | i -> st.indent <- i)
     done
 
-  let fix_measure st r =
-    r := st.pos + !r
-
   let evict_overflowed_groups st =
-    let overflowing r = st.pos + !r > st.width in
+    let overflowing_open r = st.pos + !r > st.width
+    and overflowing_closed r = - (!r + 1) > st.width
+    in
     while not (Queue.is_empty st.closed_groups)
-          && overflowing (Queue.peek st.closed_groups)
+          && overflowing_closed (Queue.peek st.closed_groups)
     do
-      fix_measure st (Queue.take st.closed_groups)
+      Queue.take st.closed_groups := st.width + 1
     done;
     while not (CCDeque.is_empty st.open_groups)
-          && overflowing (CCDeque.peek_front st.open_groups)
+          && overflowing_open (CCDeque.peek_front st.open_groups)
     do
-      fix_measure st (CCDeque.take_front st.open_groups)
+      CCDeque.take_front st.open_groups := st.width + 1
     done
   (* conjecture: all the pruned groups occur in the order they appear
      in the queue, so we can just count the number of evicted groups,
      and step that far forwards in the queue of pending events. This
      would avoid the need for the reference too. TODO: I'm pretty sure
      this isn't true. *)
+
+  (* FIXME: this step means that we can take time proportional to the
+     number of currently closed groups every time we do a 'text' or an
+     'alignment_spaces'. Is there a way of avoiding this? 
+
+     Could push the adjustment on to the closed_groups queue, and when
+     we process it, we apply the increments one by one in
+     flush_closed_groups and evict_overflowed_groups. *)
+  let increment_closed_groups st width =
+    let incr m = m := !m - width in
+    Queue.iter incr st.closed_groups
 
   let text st txt =
     let width = String.length txt in
@@ -184,6 +191,7 @@ end = struct
          aren't waiting for a decision on a line break. *)
       Queue.push (Text txt) st.queue;
       st.pos <- st.pos + width;
+      increment_closed_groups st width;
       evict_overflowed_groups st;
       layout st
     end
@@ -199,14 +207,16 @@ end = struct
     Queue.push End_group st.queue;
     if not (CCDeque.is_empty st.open_groups) then
       let measurer = CCDeque.take_back st.open_groups in
+      measurer := - (st.pos + !measurer + 1);
       Queue.push measurer st.closed_groups
 
   (* [flush_closed_groups] sets the final measurement for all unpruned
-     groups in the input stream. There may still be unfinished outer
+     groups in the input stream. There may still be unfinished open
      groups, so we cannot yet necessarily print these groups. *)
   let flush_closed_groups st =
     while not (Queue.is_empty st.closed_groups) do
-      fix_measure st (Queue.take st.closed_groups)
+      let r = Queue.take st.closed_groups in
+      r := - (!r + 1)
     done
 
   let break st txt =
@@ -238,10 +248,12 @@ end = struct
     Queue.push End_align st.queue
 
   let alignment_spaces st i =
-    (* FIXME: this doesn't quite work: we need to add [i] to the
-       widths of all the currently closed groups, but not include the
-       measurement in the currently open groups. *)
-    Queue.push (Alignment_spaces i) st.queue
+    if i > 0 then begin
+      Queue.push (Alignment_spaces i) st.queue;
+      increment_closed_groups st i;
+      evict_overflowed_groups st;
+      layout st
+    end
 end
 
 type t =
