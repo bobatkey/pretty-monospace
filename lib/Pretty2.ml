@@ -72,8 +72,13 @@ end = struct
     (* measurement *)
     ; mutable pos      : int (** the absolute position in the input, if
                                  everything was flat. *)
+    ; mutable alignment_spaces : int
+    (** the number of alignment_spaces we have seen since the last
+        line break that apply to all the closed groups in the
+        [closed_group] queue. This counter is adjusted for group nesting
+        by the [`Adjust i] elements of [closed_groups]. *)
     ; open_groups      : group_status ref CCDeque.t
-    ; closed_groups    : group_status ref Queue.t
+    ; closed_groups    : [`Adjust of int | `Group of group_status ref] Queue.t
 
     (* layout state *)
     ; mutable flat     : int (* number of 'start_group's we are
@@ -86,6 +91,7 @@ end = struct
   let init width out_buf =
     { queue         = Queue.create ()
     ; pos           = 1 (* count from 1 so we can represent measuring tasks by negative numbers and not get confused by 0-width groups *)
+    ; alignment_spaces = 0
     ; open_groups   = CCDeque.create ()
     ; closed_groups = Queue.create ()
     ; out_buf
@@ -152,16 +158,23 @@ end = struct
     done
 
   let evict_overflowed_groups st =
-    let overflowing_open r = st.pos + !r > st.width
-    and overflowing_closed r = - (!r + 1) > st.width
+    let rec check_closed_groups () =
+      match Queue.peek st.closed_groups with
+        | exception Queue.Empty -> ()
+        | `Group r when st.pos + !r + st.alignment_spaces > st.width ->
+           ignore (Queue.take st.closed_groups);
+           r := st.width + 1;
+           check_closed_groups ()
+        | `Adjust i ->
+           ignore (Queue.take st.closed_groups);
+           st.alignment_spaces <- st.alignment_spaces - i;
+           check_closed_groups ()
+        | _ ->
+           ()
     in
-    while not (Queue.is_empty st.closed_groups)
-          && overflowing_closed (Queue.peek st.closed_groups)
-    do
-      Queue.take st.closed_groups := st.width + 1
-    done;
+    check_closed_groups ();
     while not (CCDeque.is_empty st.open_groups)
-          && overflowing_open (CCDeque.peek_front st.open_groups)
+          && st.pos + !(CCDeque.peek_front st.open_groups) > st.width
     do
       CCDeque.take_front st.open_groups := st.width + 1
     done
@@ -170,17 +183,6 @@ end = struct
      and step that far forwards in the queue of pending events. This
      would avoid the need for the reference too. TODO: I'm pretty sure
      this isn't true. *)
-
-  (* FIXME: this step means that we can take time proportional to the
-     number of currently closed groups every time we do a 'text' or an
-     'alignment_spaces'. Is there a way of avoiding this? 
-
-     Could push the adjustment on to the closed_groups queue, and when
-     we process it, we apply the increments one by one in
-     flush_closed_groups and evict_overflowed_groups. *)
-  let increment_closed_groups st width =
-    let incr m = m := !m - width in
-    Queue.iter incr st.closed_groups
 
   let text st txt =
     let width = String.length txt in
@@ -191,7 +193,6 @@ end = struct
          aren't waiting for a decision on a line break. *)
       Queue.push (Text txt) st.queue;
       st.pos <- st.pos + width;
-      increment_closed_groups st width;
       evict_overflowed_groups st;
       layout st
     end
@@ -202,21 +203,19 @@ end = struct
     CCDeque.push_back st.open_groups measure
 
   let end_group st =
-    (* FIXME: could track group nesting here to track errors; or track
-       it later on in the layout phase? *)
     Queue.push End_group st.queue;
     if not (CCDeque.is_empty st.open_groups) then
       let measurer = CCDeque.take_back st.open_groups in
-      measurer := - (st.pos + !measurer + 1);
-      Queue.push measurer st.closed_groups
+      Queue.push (`Group measurer) st.closed_groups
 
   (* [flush_closed_groups] sets the final measurement for all unpruned
-     groups in the input stream. There may still be unfinished open
-     groups, so we cannot yet necessarily print these groups. *)
+     closed groups in the input stream. There may still be unfinished
+     open groups, so we cannot yet necessarily print these groups. *)
   let flush_closed_groups st =
     while not (Queue.is_empty st.closed_groups) do
-      let r = Queue.take st.closed_groups in
-      r := - (!r + 1)
+      match Queue.take st.closed_groups with
+        | `Group r  -> r := st.pos + !r + st.alignment_spaces
+        | `Adjust i -> st.alignment_spaces <- st.alignment_spaces - i
     done
 
   let break st txt =
@@ -250,7 +249,8 @@ end = struct
   let alignment_spaces st i =
     if i > 0 then begin
       Queue.push (Alignment_spaces i) st.queue;
-      increment_closed_groups st i;
+      Queue.push (`Adjust i) st.closed_groups;
+      st.alignment_spaces <- st.alignment_spaces + i;
       evict_overflowed_groups st;
       layout st
     end
