@@ -44,6 +44,13 @@ module PrettyStream : sig
   val finish      : t -> unit
 end = struct
 
+  (* FIXME: keep track of the nesting of 'nest's, 'align's and
+     'group's to spot user errors. *)
+
+  (* FIXME: provide an API that just sends the measured groups and
+     other events to another process to process them. Could be generic
+     in what the other events are. *)
+
   type group_status = int
 
   type event =
@@ -101,10 +108,6 @@ end = struct
     ; indent        = 0
     ; indents       = Stack.create ()
     }
-
-  (* FIXME: provide an API that just sends the measured groups and
-     other events to another process to process them. Could be generic
-     in what the other events are. *)
 
   let layout st =
     (* whenever we get stuck in layout, the head of the queue will
@@ -226,15 +229,13 @@ end = struct
     layout st
 
   let finish st =
-    (* FIXME: alternative is to silently close all the open groups *)
-    assert (CCDeque.is_empty st.open_groups);
+    if not (CCDeque.is_empty st.open_groups) then
+      invalid_arg "Pretty.finish: open groups at end of input";
     flush_closed_groups st;
     layout st;
     assert (Queue.is_empty st.queue)
 
   let start_nest st i =
-    (* FIXME: keep track of the nesting of 'nest's, 'align's and
-       'group's to spot user errors. *)
     Queue.push (Start_nest i) st.queue
 
   let end_nest st =
@@ -308,68 +309,3 @@ let alignment_spaces i =
   if i < 0 then invalid_arg ("Pretty.alignment_spaces")
   else Alignment_spaces i
 let align x = Align x
-
-(*
-let test_lineleft_doc =
-  Document.(group
-    (text "begin"
-     ^^ nest 3 (break " "
-                ^^ group (text "stmt;"
-                          ^/^ text "stmt;"
-                          ^/^ text "stmt;"))
-     ^^ text "end"))
-
-let test_lineleft_doc2 =
-  Document.(group
-    (text "begin"
-     ^^ nest 3 (break " "
-                ^^ group (text "stmt;"
-                          ^/^ text "stmt;"
-                          ^/^ text "stmt;"))
-     ^/^ text "end"))
-
-let group f pp =
-  Pretty.start_group pp;
-  f pp;
-  Pretty.end_group pp
-
-let nest i f pp =
-  Pretty.start_nest pp i;
-  f pp;
-  Pretty.end_nest pp
-  
-let text s pp =
-  Pretty.text pp s
-
-let break pp =
-  Pretty.break pp " "
-
-let (^^) f g pp =
-  f pp;
-  g pp
-
-let test w =
-  Pretty.init w |>
-  text "["
-  ^^
-  nest 1 (group
-    begin
-      text "1"
-      ^^
-      break
-      ^^
-      text "2"
-      ^^
-      break
-      ^^
-      text "3"
-      ^^
-      break
-      ^^
-      text "4"
-    end)
-  ^^
-  text "]"
-  ^^
-  Pretty.finish
-*)
