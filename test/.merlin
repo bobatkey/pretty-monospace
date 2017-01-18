@@ -4,3 +4,4 @@ S ../lib
 B ../lib/_build
 PKG oUnit
 PKG camlcheck
+PKG containers.data

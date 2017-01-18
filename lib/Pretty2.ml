@@ -28,10 +28,10 @@
    - Break:      if breaking, then newline; else space
 *)
 
-module Pretty : sig
+module PrettyStream : sig
   type t
 
-  val init        : int -> t
+  val init        : int -> Buffer.t -> t
   val text        : t -> string -> unit
   val start_group : t -> unit
   val end_group   : t -> unit
@@ -70,6 +70,7 @@ end = struct
 
     (* configuration *)
     ; width            : int
+    ; out_buf          : Buffer.t
 
     (* measurement *)
     ; mutable pos      : int (** the absolute position in the input, if
@@ -85,11 +86,12 @@ end = struct
     ;         indents  : int Stack.t
     }
 
-  let init width =
+  let init width out_buf =
     { queue         = Queue.create ()
     ; pos           = 1 (* count from 1 so we can represent measuring tasks by negative numbers and not get confused by 0-width groups *)
     ; open_groups   = CCDeque.create ()
     ; closed_groups = Queue.create ()
+    ; out_buf
     ; width
     ; flat          = 0
     ; column        = 0
@@ -117,7 +119,7 @@ end = struct
     while not (Queue.is_empty st.queue) && is_live (Queue.peek st.queue) do
       match Queue.take st.queue with
         | Text s ->
-           print_string s;
+           Buffer.add_string st.out_buf s;
            st.column <- st.column + String.length s
         | Start_group _ when st.flat > 0 ->
            st.flat <- st.flat + 1
@@ -129,15 +131,16 @@ end = struct
            if st.flat > 0 then st.flat <- st.flat - 1
         | Break s ->
            if st.flat = 0 then
-             (print_newline ();
-              print_string (String.make st.indent ' ');
+             (Buffer.add_char st.out_buf '\n';
+              Buffer.add_string st.out_buf (String.make st.indent ' ');
               st.column <- st.indent)
            else
-             (print_string s;
+             (Buffer.add_string st.out_buf s;
               st.column <- st.column + String.length s)
         | Alignment_spaces i ->
            if st.flat = 0 then
-             print_string (String.make i ' ')
+             (Buffer.add_string st.out_buf (String.make i ' ');
+              st.column <- st.column + i)
         | Start_nest i ->
            Stack.push st.indent st.indents;
            st.indent <- st.indent + i
@@ -241,51 +244,60 @@ end = struct
     Queue.push (Alignment_spaces i) st.queue
 end
 
-module Document = struct
-  type t =
-    | Emp
-    | Concat of t * t
-    | Text of string
-    | Break of string
-    | Alignment_spaces of int
-    | Group of t
-    | Nest of int * t
-    | Align of t
+type t =
+  | Emp
+  | Concat of t * t
+  | Text of string
+  | Break of string
+  | Alignment_spaces of int
+  | Group of t
+  | Nest of int * t
+  | Align of t
 
-  let render width doc =
-    let pp = Pretty.init width in
-    let rec render = function
-      | Emp -> ()
-      | Concat (x, y) -> render x; render y
-      | Text s        -> Pretty.text pp s
-      | Break s       -> Pretty.break pp s
-      | Alignment_spaces i -> Pretty.alignment_spaces pp i
-      | Group x ->
-         Pretty.start_group pp;
-         render x;
-         Pretty.end_group pp
-      | Nest (i, x) ->
-         Pretty.start_nest pp i;
-         render x;
-         Pretty.end_nest pp
-      | Align x ->
-         Pretty.start_align pp;
-         render x;
-         Pretty.end_align pp
-    in
-    render doc;
-    Pretty.finish pp
+open PrettyStream
+  
+let render width doc =
+  let b = Buffer.create 128 in
+  let pp = init width b in
+  let rec render = function
+    | Emp -> ()
+    | Concat (x, y) -> render x; render y
+    | Text s        -> text pp s
+    | Break s       -> break pp s
+    | Alignment_spaces i -> alignment_spaces pp i
+    | Group x ->
+       start_group pp;
+       render x;
+       end_group pp
+    | Nest (i, x) ->
+       start_nest pp i;
+       render x;
+       end_nest pp
+    | Align x ->
+       start_align pp;
+       render x;
+       end_align pp
+  in
+  render doc;
+  finish pp;
+  Buffer.contents b
 
-  let empty = Emp
-  let (^^) x y = Concat (x, y)
-  let text s = Text s
-  let break s = Break s
-  let group x = Group x
-  let nest i x = Nest (i,x)
-  let (^/^) x y = x ^^ break " " ^^ y
-  let alignment_spaces i = Alignment_spaces i
-end
+let empty = Emp
+let (^^) x y = Concat (x, y)
+let text s = Text s
+let break_with s = Break s
+let break = break_with " "
+let group x = Group x
+let nest i x =
+  if i < 0 then invalid_arg ("Pretty.nest")
+  else Nest (i,x)
+let (^/^) x y = x ^^ break_with " " ^^ y
+let alignment_spaces i =
+  if i < 0 then invalid_arg ("Pretty.alignment_spaces")
+  else Alignment_spaces i
+let align x = Align x
 
+(*
 let test_lineleft_doc =
   Document.(group
     (text "begin"
@@ -348,3 +360,4 @@ let test w =
   text "]"
   ^^
   Pretty.finish
+*)
