@@ -31,7 +31,7 @@
 module PrettyStream : sig
   type t
 
-  val init        : int -> Buffer.t -> t
+  val create      : int -> Buffer.t -> t
   val text        : t -> string -> unit
   val start_group : t -> unit
   val end_group   : t -> unit
@@ -49,43 +49,44 @@ end = struct
 
   (* FIXME: provide an API that just sends the measured groups and
      other events to another process to process them. Could be generic
-     in what the other events are. *)
+     in what the other events are? Just need a way to measure their
+     widths. *)
 
-  type group_status = int
+  type not_group
+  type is_group
+
+  type _ event' =
+    | Text : string -> not_group event'
+
+    | Start_group : { mutable measure : int } -> is_group event'
+    | End_group : not_group event'
+
+    | Break : string -> not_group event'
+    | Alignment_spaces : int -> not_group event'
+
+    | Start_nest : int -> not_group event'
+    | Start_align : not_group event'
+    | End_nestalign : not_group event'
 
   type event =
-    | Text of string
-
-    | Start_group of group_status ref
-    | End_group
-
-    | Break of string
-    | Alignment_spaces of int
-
-    | Start_nest of int
-    | End_nest
-    | Start_align
-    | End_align
+    | Ev : _ event' -> event [@@ocaml.unboxed]
 
   type t =
-    { queue            : event Queue.t
-    (** queue of events that are waiting, pending the resolution of
-        group sizes *)
+    { width            : int
+    (** The target width, used for making decisions about line
+        breaks. *)
 
-    (* configuration *)
-    ; width            : int
     ; out_buf          : Buffer.t
+    (** The output buffer. *)
 
     (* measurement *)
-    ; mutable pos      : int (** the absolute position in the input, if
-                                 everything was flat. *)
-    ; mutable alignment_spaces : int
-    (** the number of alignment_spaces we have seen since the last
-        line break that apply to all the closed groups in the
-        [closed_group] queue. This counter is adjusted for group nesting
-        by the [`Adjust i] elements of [closed_groups]. *)
-    ; open_groups      : group_status ref CCDeque.t
-    ; closed_groups    : [`Adjust of int | `Group of group_status ref] Queue.t
+    ; queue            : event Queue.t
+    (** Queue of events that are waiting on the resolution of group
+        sizes. *)
+    ; mutable pos      : int
+    (** The absolute position in the input, if everything was flat. *)
+    ; open_groups      : is_group event' CCDeque.t
+    ; closed_groups    : is_group event' Queue.t
 
     (* layout state *)
     ; mutable flat     : int (* number of 'start_group's we are
@@ -95,10 +96,11 @@ end = struct
     ;         indents  : int Stack.t
     }
 
-  let init width out_buf =
+  let create width out_buf =
     { queue         = Queue.create ()
-    ; pos           = 1 (* count from 1 so we can represent measuring tasks by negative numbers and not get confused by 0-width groups *)
-    ; alignment_spaces = 0
+    ; pos           = 1 (* count from 1 so we can represent measuring
+                           tasks by negative numbers and not get
+                           confused by 0-width groups *)
     ; open_groups   = CCDeque.create ()
     ; closed_groups = Queue.create ()
     ; out_buf
@@ -119,23 +121,23 @@ end = struct
        the last overflow check, or now have fixed measures instead of
        dynamically checking them. *)
     let is_live = function
-      | Start_group {contents} when contents < 0 -> false
+      | Ev (Start_group {measure}) when measure < 0 -> false
       | _ -> true
     in
     while not (Queue.is_empty st.queue) && is_live (Queue.peek st.queue) do
       match Queue.take st.queue with
-        | Text s ->
+        | Ev (Text s) ->
            Buffer.add_string st.out_buf s;
            st.column <- st.column + String.length s
-        | Start_group _ when st.flat > 0 ->
+        | Ev (Start_group _) when st.flat > 0 ->
            st.flat <- st.flat + 1
-        | Start_group {contents=width} when st.column + width <= st.width ->
+        | Ev (Start_group {measure}) when st.column + measure <= st.width ->
            st.flat <- 1
-        | Start_group _ ->
+        | Ev (Start_group _) ->
            ()
-        | End_group ->
+        | Ev End_group ->
            if st.flat > 0 then st.flat <- st.flat - 1
-        | Break s ->
+        | Ev (Break s) ->
            if st.flat = 0 then
              (Buffer.add_char st.out_buf '\n';
               Buffer.add_string st.out_buf (String.make st.indent ' ');
@@ -143,17 +145,17 @@ end = struct
            else
              (Buffer.add_string st.out_buf s;
               st.column <- st.column + String.length s)
-        | Alignment_spaces i ->
+        | Ev (Alignment_spaces i) ->
            if st.flat = 0 then
              (Buffer.add_string st.out_buf (String.make i ' ');
               st.column <- st.column + i)
-        | Start_nest i ->
+        | Ev (Start_nest i) ->
            Stack.push st.indent st.indents;
            st.indent <- st.indent + i
-        | Start_align ->
+        | Ev Start_align ->
            Stack.push st.indent st.indents;
            st.indent <- st.column
-        | End_nest | End_align ->
+        | Ev End_nestalign ->
            (match Stack.pop st.indents with
              | exception Stack.Empty ->
                 failwith "badly nested nests or aligns"
@@ -164,23 +166,24 @@ end = struct
     let rec check_closed_groups () =
       match Queue.peek st.closed_groups with
         | exception Queue.Empty -> ()
-        | `Group r when st.pos + !r + st.alignment_spaces > st.width ->
+        | Start_group r when st.pos + r.measure > st.width ->
            ignore (Queue.take st.closed_groups);
-           r := st.width + 1;
+           r.measure <- st.width + 1;
            check_closed_groups ()
-        | `Adjust i ->
-           ignore (Queue.take st.closed_groups);
-           st.alignment_spaces <- st.alignment_spaces - i;
-           check_closed_groups ()
-        | _ ->
+        | Start_group _ ->
            ()
     in
     check_closed_groups ();
-    while not (CCDeque.is_empty st.open_groups)
-          && st.pos + !(CCDeque.peek_front st.open_groups) > st.width
-    do
-      CCDeque.take_front st.open_groups := st.width + 1
-    done
+    let rec check_open_groups () =
+      match CCDeque.peek_front st.open_groups with
+        | Start_group r when st.pos + r.measure > st.width ->
+           ignore (CCDeque.take_front st.open_groups);
+           r.measure <- st.width + 1;
+           check_open_groups ()
+        | exception CCDeque.Empty -> ()
+        | _ -> ()
+    in
+    check_open_groups ()
   (* conjecture: all the pruned groups occur in the order they appear
      in the queue, so we can just count the number of evicted groups,
      and step that far forwards in the queue of pending events. This
@@ -194,22 +197,22 @@ end = struct
          then switch the order. This reduces the latency of the
          printer so that text is always output immediately if we
          aren't waiting for a decision on a line break. *)
-      Queue.push (Text txt) st.queue;
+      Queue.push (Ev (Text txt)) st.queue;
       st.pos <- st.pos + width;
       evict_overflowed_groups st;
       layout st
     end
 
   let start_group st =
-    let measure = ref (- st.pos) in
-    Queue.push (Start_group measure) st.queue;
-    CCDeque.push_back st.open_groups measure
+    let ev = Start_group { measure = - st.pos } in
+    Queue.push (Ev ev) st.queue;
+    CCDeque.push_back st.open_groups ev
 
   let end_group st =
-    Queue.push End_group st.queue;
+    Queue.push (Ev End_group) st.queue;
     if not (CCDeque.is_empty st.open_groups) then
       let measurer = CCDeque.take_back st.open_groups in
-      Queue.push (`Group measurer) st.closed_groups
+      Queue.push measurer st.closed_groups
 
   (* [flush_closed_groups] sets the final measurement for all unpruned
      closed groups in the input stream. There may still be unfinished
@@ -217,13 +220,12 @@ end = struct
   let flush_closed_groups st =
     while not (Queue.is_empty st.closed_groups) do
       match Queue.take st.closed_groups with
-        | `Group r  -> r := st.pos + !r + st.alignment_spaces
-        | `Adjust i -> st.alignment_spaces <- st.alignment_spaces - i
+        | Start_group r -> r.measure <- st.pos + r.measure
     done
 
   let break st txt =
     flush_closed_groups st;
-    Queue.push (Break txt) st.queue;
+    Queue.push (Ev (Break txt)) st.queue;
     st.pos <- st.pos + String.length txt;
     evict_overflowed_groups st;
     layout st
@@ -236,25 +238,21 @@ end = struct
     assert (Queue.is_empty st.queue)
 
   let start_nest st i =
-    Queue.push (Start_nest i) st.queue
+    if i < 0 then invalid_arg "Pretty.nest: negative argument";
+    Queue.push (Ev (Start_nest i)) st.queue
 
   let end_nest st =
-    Queue.push End_nest st.queue
+    Queue.push (Ev End_nestalign) st.queue
 
   let start_align st =
-    Queue.push Start_align st.queue
+    Queue.push (Ev Start_align) st.queue
 
   let end_align st =
-    Queue.push End_align st.queue
+    Queue.push (Ev End_nestalign) st.queue
 
   let alignment_spaces st i =
-    if i > 0 then begin
-      Queue.push (Alignment_spaces i) st.queue;
-      Queue.push (`Adjust i) st.closed_groups;
-      st.alignment_spaces <- st.alignment_spaces + i;
-      evict_overflowed_groups st;
-      layout st
-    end
+    if i > 0 then
+      Queue.push (Ev (Alignment_spaces i)) st.queue
 end
 
 type t =
@@ -268,10 +266,10 @@ type t =
   | Align of t
 
 open PrettyStream
-  
+
 let render width doc =
   let b = Buffer.create 128 in
-  let pp = init width b in
+  let pp = create width b in
   let rec render = function
     | Emp -> ()
     | Concat (x, y) -> render x; render y
@@ -299,12 +297,10 @@ let empty = Emp
 let (^^) x y = Concat (x, y)
 let text s = Text s
 let break_with s = Break s
-let break = break_with " "
 let group x = Group x
 let nest i x =
   if i < 0 then invalid_arg ("Pretty.nest")
   else Nest (i,x)
-let (^/^) x y = x ^^ break_with " " ^^ y
 let alignment_spaces i =
   if i < 0 then invalid_arg ("Pretty.alignment_spaces")
   else Alignment_spaces i

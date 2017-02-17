@@ -5,3 +5,4 @@ B ../lib/_build
 PKG oUnit
 PKG camlcheck
 PKG containers.data
+FLG -w +32

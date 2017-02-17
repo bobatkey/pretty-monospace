@@ -130,7 +130,7 @@ module Combinators = struct
     else
       { node       = AlignSpaces n
       ; flat_width = 0
-      ; break_dist = n
+      ; break_dist = 0
       ; break_type = `NoBreak
       }
 

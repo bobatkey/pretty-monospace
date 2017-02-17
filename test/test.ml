@@ -4,96 +4,16 @@ open OUnit
 open CamlCheck
 
 module type PRETTY_DOC = sig
-  type t
-  val ( ^^ ) : t -> t -> t
-  val empty : t
-  val text : string -> t
-  val break_with : string -> t
-  val alignment_spaces : int -> t
-  val group : t -> t
-  val nest : int -> t -> t
-  val align : t -> t
+  include Pretty_AST.LAYOUT_SPEC_LANGUAGE
 
   val render : int -> t -> string
 end
-
-type ast =
-  | Empty
-  | Concat of ast * ast
-  | Text of string
-  | Break
-  | Nest of int * ast
-  | Alignment_spaces of int
-  | Group of ast
-  | Align of ast
-
-let rec to_string = function
-  | Empty              -> "Empty"
-  | Concat (x,y)       -> "Concat (" ^ to_string x ^ "," ^ to_string y ^ ")"
-  | Text s             -> "Text " ^ String.escaped s
-  | Break              -> "Break"
-  | Nest (i,x)         -> "Nest (" ^ string_of_int i ^ "," ^ to_string x ^ ")"
-  | Alignment_spaces i -> "Alignment_spaces " ^ string_of_int i
-  | Group x            -> "Group (" ^ to_string x ^ ")"
-  | Align x            -> "Align (" ^ to_string x ^ ")"
-
-(* Random generation of asts *)
-let document_ast_generator depth =
-  let open Generator in
-  let rec make depth =
-    if depth = 0 then
-      int 3 >>= function
-      | 0 -> return Empty
-      | 1 -> (fun s -> Text s) <$> Domain.to_generator Domain.printable_ascii_string
-      | 2 -> return Break
-      | _ -> assert false
-    else
-      int 5 >>= function
-      | 0 -> (fun x y -> Concat (x,y)) <$> make (depth-1) <*> make (depth-1)
-      | 1 -> (fun i x -> Nest (i,x)) <$> int 10 <*> make (depth-1)
-      | 2 -> (fun i -> Alignment_spaces i) <$> int 20
-      | 3 -> (fun x -> Group x) <$> make (depth-1)
-      | 4 -> (fun x -> Align x) <$> make (depth-1)
-      | _ -> assert false
-  in
-  make depth
-
-let rec shrink = function
-  | Empty        -> [Empty]
-  | Concat (x,y) -> [ x; y ] @ List.concat (List.map (fun x -> List.map (fun y -> Concat (x,y)) (shrink y)) (shrink x))
-  | Text s       -> [Text s]
-  | Break        -> [Break]
-  | Alignment_spaces i -> [Alignment_spaces i]
-  | Nest (i,x)   -> [x] @ List.map (fun x -> Nest (i,x)) (shrink x)
-  | Group x      -> [x] @ List.map (fun x -> Group x) (shrink x)
-  | Align x      -> [x] @ List.map (fun x -> Align x) (shrink x)
-
-let shrink x =
-  List.filter (fun y -> not (x = y)) (shrink x)
-
-let ast =
-  Domain.make
-    ~generator:Generator.(int 10 >>= document_ast_generator)
-    ~to_string
-    ~description:"document"
-    ~shrink
-    ()
 
 module Doc_utils (D : PRETTY_DOC) = struct
   include D
 
   let break = break_with " "
   let (^/^) x y = x ^^ break ^^ y
-
-  let rec document_of_ast = function
-    | Empty              -> empty
-    | Concat (x,y)       -> document_of_ast x ^^ document_of_ast y
-    | Text s             -> text s
-    | Break              -> break
-    | Nest (i,x)         -> nest i (document_of_ast x)
-    | Alignment_spaces i -> alignment_spaces i
-    | Group x            -> group (document_of_ast x)
-    | Align x            -> align (document_of_ast x)
 end
 
 module Make_comparison_test (D1 : PRETTY_DOC) (D2 : PRETTY_DOC) = struct
@@ -102,20 +22,20 @@ module Make_comparison_test (D1 : PRETTY_DOC) (D2 : PRETTY_DOC) = struct
 
   let equal_render_test =
     "equal_render" >: Property.to_test
-      (Property.forall ast @@ fun d ->
+      (Property.forall Pretty_AST.ast @@ fun d ->
        Property.forall (Domain.int_range 0 200) @@ fun width ->
        Property.equal ~to_string:(fun s -> "\"" ^ String.escaped s ^ "\"")
-         (D1.render width (D1.document_of_ast d))
-         (D2.render width (D2.document_of_ast d)))
+         (D1.render width (Pretty_AST.interp (module D1) d))
+         (D2.render width (Pretty_AST.interp (module D2) d)))
 end
 
 module Contextual_Equivalence_Tests (D : PRETTY_DOC) = struct
   open D
   include Doc_utils (D)
 
-  let document_generator i =
-    Generator.(document_of_ast <$> document_ast_generator i)
-
+  let document_generator =
+    Pretty_AST.document_generator (module D)
+  
   let document =
     Domain.make
       ~generator:Generator.(int 10 >>= document_generator)
@@ -183,18 +103,21 @@ module Contextual_Equivalence_Tests (D : PRETTY_DOC) = struct
       ~to_string:string_of_document_context
       ~description:"document_context"
       ~shrink
-      ()  
+      ()
 
-  (** Property that states that two documents are contextually equivalent. *)
+  (** Property that states that two documents are contextually
+      equivalent. *)
   let ( =~= ) document1 document2 =
     Property.forall (Domain.int_range 0 200) @@ fun width ->
     Property.forall document_context @@ fun c ->
-    Property.equal ~to_string:String.escaped
+    Property.equal ~to_string:(Printf.sprintf "%S")
       (render width (c @// document1))
       (render width (c @// document2))
 end
 
-module Property_tests (D : PRETTY_DOC) = struct
+module Property_tests (D : PRETTY_DOC) : sig
+  val suite : OUnit.test list
+end = struct
   open D
 
   include Contextual_Equivalence_Tests (D)
@@ -269,6 +192,12 @@ module Property_tests (D : PRETTY_DOC) = struct
     Property.forall (Domain.int_range 0 40) @@ fun n2 ->
     alignment_spaces n1 ^^ nest n2 d =~= nest n2 (alignment_spaces n1 ^^ d)
 
+  let prop_alignment_spaces_nest =
+    Property.forall document @@ fun d ->
+    Property.forall (Domain.int_range 0 40) @@ fun n1 ->
+    Property.forall (Domain.int_range 0 40) @@ fun n2 ->
+    nest n2 d ^^ alignment_spaces n1 =~= nest n2 (d ^^ alignment_spaces n1)
+
   let prop_alignment_spaces_empty =
     alignment_spaces 0 =~= empty
 
@@ -310,13 +239,13 @@ module Property_tests (D : PRETTY_DOC) = struct
 
   let prop_exn_nest =
     Property.forall document @@ fun d ->
-    Property.forall (Domain.int_range (-100) (-1)) @@ fun n ->
+    Property.forall (Domain.int_range (-2000) (-1)) @@ fun n ->
     Property.raises
       (Invalid_argument "Pretty.nest")
       (fun () -> nest n d)
 
   let prop_exn_alignment_spaces =
-    Property.forall (Domain.int_range (-100) (-1)) @@ fun n ->
+    Property.forall (Domain.int_range (-2000) (-1)) @@ fun n ->
     Property.raises
       (Invalid_argument "Pretty.alignment_spaces")
       (fun () -> alignment_spaces n)
@@ -433,10 +362,12 @@ module Property_tests (D : PRETTY_DOC) = struct
       ~expected_output:"xxx= yyy"
 
   let test_alignment_spaces3 () =
+    (* Check that alignment_spaces do not count towards the
+       measurement of how much space is left on a line *)
     check_render
       6
       ~document:(group break ^^ alignment_spaces 8)
-      ~expected_output:"\n        "
+      ~expected_output:"         "
 
   (* These three tests test that the breaking computation takes into
      account all of the queued print jobs on the current line *)
@@ -532,6 +463,7 @@ let prop_custom_output =
       ; "zero_nest"         >: Property.to_test prop_zero_nest
       ; "nest_nest"         >: Property.to_test prop_nest_nest
       ; "nest_alignment_spaces">: Property.to_test prop_nest_alignment_spaces
+      ; "alignment_spaces_nest">: Property.to_test prop_alignment_spaces_nest
 
       ; "alignment_spaces_empty">: Property.to_test prop_alignment_spaces_empty
       ; "alignment_spaces_add" >: Property.to_test prop_alignment_spaces_add
@@ -670,13 +602,17 @@ end
 module Eager_Props        = Property_tests (Eager)
 module Eager_Derived      = Derived_Combinator_Tests (Eager)
 module Tests_of_Streaming = Property_tests (Pretty2)
+module Lindig_Props       = Property_tests (Lindig)
 module Comparison         = Make_comparison_test (Eager) (Pretty2)
+module Comparison2        = Make_comparison_test (Lindig) (Pretty2)
 
 let _ =
   run_test_tt_main
     ("all tests" >:::
      [ "eager"         >::: Eager_Props.suite
      ; "streaming"     >::: Tests_of_Streaming.suite
+     ; "lindig"        >::: Lindig_Props.suite
      ; "comparison"    >:   Comparison.equal_render_test
+     ; "comparison2"   >:   Comparison2.equal_render_test
      ; "eager derived" >::: Eager_Derived.suite
      ])
