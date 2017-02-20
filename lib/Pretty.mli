@@ -273,6 +273,28 @@ module Combinators : sig
       arr)]. *)
   val wrap_array : t -> t array -> t
 
+  (** [fold ~empty ~concat ~text ~break ~alignspaces ~nest ~align
+     ~group doc] visits the nodes representing [doc] and calls the
+     appropriate function argument on each one. Note that the
+     structure visited will not necessarily be identical to the one
+     implied by use of the construction functions above. However, it
+     will be render-equivalent. The [~group] argument recieves
+     additional argument s with the flat width of the sub-element, and
+     the computed distance from the start of this group to the next
+     line break opporunity following the group in the document. This
+     makes [fold] non-local (FIXME: elaborate on this). *)
+  val fold :
+    empty:'a ->
+    concat:('a -> 'a -> 'a) ->
+    text:(string -> 'a) ->
+    break:(string -> 'a) ->
+    alignspaces:(int -> 'a) ->
+    nest:(int -> 'a -> 'a) ->
+    align:('a -> 'a) ->
+    group:(int -> 'a -> 'a) ->
+    document ->
+    'a
+
 (**/**)
   
   (* Generate a string representation of the underlying representation

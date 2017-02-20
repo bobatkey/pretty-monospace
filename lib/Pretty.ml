@@ -8,6 +8,9 @@ module Combinators = struct
         without line breaks. *)
     ; break_dist : int
     ; break_type : [`Break|`NoBreak]
+    (** Internal distance to either a line break opportunity
+       ([`Break]), or to the end of the document if there is no nested
+       break opportunity ([`NoBreak]). *)
     }
 
   and document_node =
@@ -41,6 +44,10 @@ module Combinators = struct
     | Group of document
     (** group a sub-document for deciding whether to break lines or
         not. *)
+
+  let (+/) {break_type;break_dist} bd = match break_type with
+    | `Break   -> break_dist
+    | `NoBreak -> break_dist + bd
 
   type t = document
 
@@ -215,6 +222,28 @@ module Combinators = struct
               ((if first then x else d ^^ sep ^^ group (break ^^ x)), false))
            (empty,true)
            ds)
+
+  let fold ~empty ~concat ~text ~break ~alignspaces ~nest ~align ~group doc =
+    (* FIXME: tail recursive using an explicit stack? *)
+    let rec fold break_distance = function
+      | { node = Empty } ->
+         empty
+      | { node = Concat (d1, d2) } ->
+         concat (fold (d2 +/ break_distance) d1) (fold break_distance d2)
+      | { node = Text s } ->
+         text s
+      | { node = Break s } ->
+         break s
+      | { node = AlignSpaces n } ->
+         alignspaces n
+      | { node = Nest (i, d) } ->
+         nest i (fold break_distance d)
+      | { node = Align d } ->
+         align (fold break_distance d)
+      | { node = Group d; flat_width } ->
+         group (flat_width + break_distance) (fold break_distance d)
+    in
+    fold 0 doc
 end
 
 open Combinators
@@ -222,10 +251,6 @@ open Combinators
 type document = t
 
 let format output_text output_newline output_spaces width doc =
-  let (+/) {break_type;break_dist} bd = match break_type with
-    | `Break   -> break_dist
-    | `NoBreak -> break_dist + bd
-  in
   let rec flat = function
     | {node=Empty | AlignSpaces _}          -> ()
     | {node=Concat (x,y)}                   -> flat x; flat y
