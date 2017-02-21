@@ -28,10 +28,16 @@
    - Break:      if breaking, then newline; else space
 *)
 
+type output =
+  { text    : string -> unit
+  ; newline : unit -> unit
+  ; spaces  : int -> unit
+  }
+
 module PrettyStream : sig
   type t
 
-  val create      : int -> Buffer.t -> t
+  val create      : int -> output -> t
   val text        : t -> string -> unit
   val start_group : t -> unit
   val end_group   : t -> unit
@@ -76,8 +82,8 @@ end = struct
     (** The target width, used for making decisions about line
         breaks. *)
 
-    ; out_buf          : Buffer.t
-    (** The output buffer. *)
+    ; output           : output
+    (** The output functions. *)
 
     (* measurement *)
     ; queue            : event Queue.t
@@ -96,14 +102,14 @@ end = struct
     ;         indents  : int Stack.t
     }
 
-  let create width out_buf =
+  let create width output =
     { queue         = Queue.create ()
     ; pos           = 1 (* count from 1 so we can represent measuring
                            tasks by negative numbers and not get
                            confused by 0-width groups *)
     ; open_groups   = CCDeque.create ()
     ; closed_groups = Queue.create ()
-    ; out_buf
+    ; output
     ; width
     ; flat          = 0
     ; column        = 0
@@ -127,7 +133,7 @@ end = struct
     while not (Queue.is_empty st.queue) && is_live (Queue.peek st.queue) do
       match Queue.take st.queue with
         | Ev (Text s) ->
-           Buffer.add_string st.out_buf s;
+           st.output.text s;
            st.column <- st.column + String.length s
         | Ev (Start_group _) when st.flat > 0 ->
            st.flat <- st.flat + 1
@@ -139,15 +145,15 @@ end = struct
            if st.flat > 0 then st.flat <- st.flat - 1
         | Ev (Break s) ->
            if st.flat = 0 then
-             (Buffer.add_char st.out_buf '\n';
-              Buffer.add_string st.out_buf (String.make st.indent ' ');
+             (st.output.newline ();
+              st.output.spaces st.indent;
               st.column <- st.indent)
            else
-             (Buffer.add_string st.out_buf s;
+             (st.output.text s;
               st.column <- st.column + String.length s)
         | Ev (Alignment_spaces i) ->
            if st.flat = 0 then
-             (Buffer.add_string st.out_buf (String.make i ' ');
+             (st.output.spaces i;
               st.column <- st.column + i)
         | Ev (Start_nest i) ->
            Stack.push st.indent st.indents;
@@ -269,7 +275,12 @@ open PrettyStream
 
 let render width doc =
   let b = Buffer.create 128 in
-  let pp = create width b in
+  let output = { text    = Buffer.add_string b
+               ; newline = (fun () -> Buffer.add_char b '\n')
+               ; spaces  = (fun n  -> Buffer.add_string b (String.make n ' '))
+               }
+  in
+  let pp = create width output in
   let rec render = function
     | Emp -> ()
     | Concat (x, y) -> render x; render y

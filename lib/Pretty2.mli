@@ -1,7 +1,13 @@
+type output =
+  { text    : string -> unit
+  ; newline : unit -> unit
+  ; spaces  : int -> unit
+  }
+
 module PrettyStream : sig
   type t
 
-  val create      : int -> Buffer.t -> t
+  val create      : int -> output -> t
   val text        : t -> string -> unit
   val start_group : t -> unit
   val end_group   : t -> unit
