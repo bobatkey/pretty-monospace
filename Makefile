@@ -1,18 +1,13 @@
 .DEFAULT_GOAL := all
 
 ######################################################################
-
-SRCDIR := lib
-include build-support/OCamlSrcs.makefile
-
-SRCDIR := test
-include build-support/OCamlSrcs.makefile
-
-######################################################################
 .PHONY: all clean install uninstall
 
-all: lib/_build/pretty-monospace.cma \
-     lib/_build/pretty-monospace.cmxa
+all: _build/lib/pretty-monospace.cma \
+     _build/lib/pretty-monospace.cmxa
+
+_build/%:
+	ocamlbuild -use-ocamlfind $*
 
 doc: doc/index.html doc/style.css
 
@@ -23,25 +18,24 @@ doc/index.html: lib/Pretty.mli
 doc/style.css: style.css
 	cp $< $@
 
-test: test/_build/native_bin/test
+test: _build/test/test.native
 	$<
 
-install: lib/_build/pretty-monospace.cma \
-     lib/_build/pretty-monospace.cmxa
+install: all
 	@ocamlfind install pretty-monospace META \
-            lib/_build/pretty-monospace.cma \
-            lib/_build/pretty-monospace.cmxa \
-            lib/_build/pretty-monospace.a \
-            lib/_build/*.cmi \
-            lib/_build/*.cmx \
-            lib/_build/*.cmt \
-            lib/_build/*.cmti \
-            lib/*.mli
+            _build/lib/pretty-monospace.cma \
+            _build/lib/pretty-monospace.cmxa \
+            _build/lib/pretty-monospace.a \
+            _build/lib/*.cmi \
+            _build/lib/*.cmx \
+            _build/lib/*.cmt \
+            _build/lib/*.cmti \
+            _build/lib/*.mli
 
 uninstall:
 	@ocamlfind remove pretty-monospace
 
 clean:
-	rm -rf $(BUILDDIRS)
+	rm -rf _build
 	rm -rf doc
-	rm -f oUnit-anon.cache
+	rm -f test.native

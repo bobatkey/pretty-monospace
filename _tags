@@ -1,0 +1,5 @@
+true: package(containers.data), safe_string, bin_annot
+
+<lib> : include
+
+<test/*> : package(camlcheck)

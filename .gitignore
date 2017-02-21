@@ -1,9 +1,2 @@
-_build
+/_build
 *~
-/oUnit-anon.cache
-/build-support/mlbindep
-/build-support/mlbindep.cmi
-/build-support/mlbindep.cmo
-/build-support/of_merlin
-/build-support/of_merlin.cmi
-/build-support/of_merlin.cmo
