@@ -1,6 +1,6 @@
-(* (C) Robert Atkey 2013, see LICENSE for more information. *)
+(* (C) Robert Atkey 2013-2017, see LICENSE for more information. *)
 
-module Combinators = struct
+module Doc = struct
   type document =
     { node       : document_node
     ; flat_width : int
@@ -244,82 +244,315 @@ module Combinators = struct
          group (flat_width + break_distance) (fold break_distance d)
     in
     fold 0 doc
+
+(*
+  let render text newline spaces width doc =
+    ignore @@ fold
+      ~empty:(fun b i col -> col)
+      ~concat:(fun x y b i col -> y b i (x b i col))
+      ~text:(fun s b i col -> text s; col + String.length s)
+      ~break:(fun s b i col ->
+          if b then (newline (); spaces i; i)
+          else (text s; col+String.length s))
+      ~alignspaces:(fun n b i col ->
+          if b then col else (spaces n; col + n))
+      ~nest:(fun j d b i col -> d b (i+j) col)
+      ~align:(fun d b i col -> d b col col)
+      ~group:(fun w d b i col ->
+          if b && col + w <= width then d false i col else d b i col)
+      doc
+      true
+      0
+      0
+*)
 end
 
-open Combinators
+type document = Doc.t
 
-type document = t
+open Doc
 
-let format output_text output_newline output_spaces width doc =
-  let rec flat = function
-    | {node=Empty | AlignSpaces _}          -> ()
-    | {node=Concat (x,y)}                   -> flat x; flat y
-    | {node=Text s | Break s}               -> output_text s
-    | {node=Align x | Nest (_,x) | Group x} -> flat x
-  in
-  let rec process column bd i = function
-    | {node=Empty} -> column
-    | {node=Concat (x,y)} ->
-       let column = process column (y +/ bd) i x in
-       process column bd i y
-    | {node=Text s} ->
-       output_text s; column + String.length s
-    | {node=AlignSpaces n} ->
-       output_spaces n; column + n
-    | {node=Align x} ->
-       process column bd column x
-    | {node=Nest (j, x)} ->
-       process column bd (i+j) x
-    | {node=Break _} ->
-       output_newline (); output_spaces i; i
-    | {node=Group x; flat_width} ->
-       if width - column - flat_width >= bd then
-         (flat x;
-          column + flat_width)
-       else
-         process column bd i x
-  in
-  ignore (process 0 0 0 doc)
+  let format text newline spaces width doc =
+    let rec flat = function
+      | {node=Empty | AlignSpaces _}          -> ()
+      | {node=Concat (x,y)}                   -> flat x; flat y
+      | {node=Text s | Break s}               -> text s
+      | {node=Align x | Nest (_,x) | Group x} -> flat x
+    in
+    let rec process column bd i = function
+      | {node=Empty} -> column
+      | {node=Concat (x,y)} ->
+         let column = process column (y +/ bd) i x in
+         process column bd i y
+      | {node=Text s} ->
+         text s; column + String.length s
+      | {node=AlignSpaces n} ->
+         spaces n; column + n
+      | {node=Align x} ->
+         process column bd column x
+      | {node=Nest (j, x)} ->
+         process column bd (i+j) x
+      | {node=Break _} ->
+         newline (); spaces i; i
+      | {node=Group x; flat_width} ->
+         if width - column - flat_width >= bd then
+           (flat x;
+            column + flat_width)
+         else
+           process column bd i x
+    in
+    ignore (process 0 0 0 doc)
 
-(******************************************************************************)
-let output ?(width=80) ch doc =
-  format
-    (fun s  -> output_string ch s)
-    (fun () -> output_char ch '\n')
-    (fun n  -> output_string ch (String.make n ' '))
-    width
-    doc
+  let output ?(width=80) ch doc =
+    format
+      (fun s  -> output_string ch s)
+      (fun () -> output_char ch '\n')
+      (fun n  -> output_string ch (String.make n ' '))
+      width
+      doc
 
-let output_endline ?(width=80) ch doc =
-  output ~width ch doc;
-  output_char ch '\n'
+  let output_endline ?(width=80) ch doc =
+    output ~width ch doc;
+    output_char ch '\n'
 
-let print ?(width=80) doc =
-  output ~width stdout doc
+  let print ?(width=80) doc =
+    output ~width stdout doc
 
-let print_endline ?(width=80) doc =
-  output_endline ~width stdout doc
+  let print_endline ?(width=80) doc =
+    output_endline ~width stdout doc
 
-let prerr ?(width=80) doc =
-  output ~width stderr doc
+  let prerr ?(width=80) doc =
+    output ~width stderr doc
 
-let prerr_endline ?(width=80) doc =
-  output_endline ~width stderr doc
+  let prerr_endline ?(width=80) doc =
+    output_endline ~width stderr doc
 
-let render ?(width=80) doc =
-  let b = Buffer.create 2048 in
-  format
-    (fun s  -> Buffer.add_string b s)
-    (fun () -> Buffer.add_char b '\n')
-    (fun n  -> Buffer.add_string b (String.make n ' '))
-    width
-    doc;
-  Buffer.contents b
+  let render ?(width=80) doc =
+    let b = Buffer.create 2048 in
+    format
+      (fun s  -> Buffer.add_string b s)
+      (fun () -> Buffer.add_char b '\n')
+      (fun n  -> Buffer.add_string b (String.make n ' '))
+      width
+      doc;
+    Buffer.contents b
 
-let custom ?(width=80) ~output_text ~output_newline ~output_spaces doc =
-  format
-    output_text
-    output_newline
-    output_spaces
-    width
-    doc
+  let custom ?(width=80) ~output_text ~output_newline ~output_spaces doc =
+    format
+      output_text
+      output_newline
+      output_spaces
+      width
+      doc
+
+module Stream = struct
+
+  type output =
+    { text    : string -> unit
+    ; newline : unit -> unit
+    ; spaces  : int -> unit
+    }
+
+  type not_group
+  type is_group
+
+  type _ event' =
+    | Text : string -> not_group event'
+
+    | Start_group : { mutable measure : int } -> is_group event'
+    | End_group : not_group event'
+
+    | Break : string -> not_group event'
+    | Alignment_spaces : int -> not_group event'
+
+    | Start_nest : int -> not_group event'
+    | Start_align : not_group event'
+    | End_nestalign : not_group event'
+
+  type event =
+    | Ev : _ event' -> event [@@ocaml.unboxed]
+
+  type prettifier =
+    { width            : int
+    (** The target width, used for making decisions about line
+        breaks. *)
+
+    ; output           : output
+    (** The output functions. *)
+
+    (* measurement *)
+    ; queue            : event Queue.t
+    (** Queue of events that are waiting on the resolution of group
+              sizes. *)
+    ; mutable pos      : int
+    (** The absolute position in the input, if everything was flat. *)
+    ; open_groups      : is_group event' CCDeque.t
+    ; closed_groups    : is_group event' Queue.t
+
+    (* layout state *)
+    ; mutable flat     : int (* number of 'start_group's we are
+                                      nested in, in flat mode *)
+    ; mutable column   : int
+    ; mutable indent   : int
+    ;         indents  : int Stack.t
+    }
+
+    let create width output =
+      { queue         = Queue.create ()
+      ; pos           = 1 (* count from 1 so we can represent measuring
+                             tasks by negative numbers and not get
+                             confused by 0-width groups *)
+      ; open_groups   = CCDeque.create ()
+      ; closed_groups = Queue.create ()
+      ; output
+      ; width
+      ; flat          = 0
+      ; column        = 0
+      ; indent        = 0
+      ; indents       = Stack.create ()
+      }
+
+    let layout st =
+      (* whenever we get stuck in layout, the head of the queue will
+         always be a Start_group, and the start_groups will always be in
+         the order they are in the open_ and closed_groups queues.
+
+         This means that we know how far to step through the queue by
+         counting the number of start_groups that have been evicted in the
+         last overflow check, or now have fixed measures instead of
+         dynamically checking them. *)
+      let is_live = function
+        | Ev (Start_group {measure}) when measure < 0 -> false
+        | _ -> true
+      in
+      while not (Queue.is_empty st.queue) && is_live (Queue.peek st.queue) do
+        match Queue.take st.queue with
+          | Ev (Text s) ->
+             st.output.text s;
+             st.column <- st.column + String.length s
+          | Ev (Start_group _) when st.flat > 0 ->
+             st.flat <- st.flat + 1
+          | Ev (Start_group {measure}) when st.column + measure <= st.width ->
+             st.flat <- 1
+          | Ev (Start_group _) ->
+             ()
+          | Ev End_group ->
+             if st.flat > 0 then st.flat <- st.flat - 1
+          | Ev (Break s) ->
+             if st.flat = 0 then
+               (st.output.newline ();
+                st.output.spaces st.indent;
+                st.column <- st.indent)
+             else
+               (st.output.text s;
+                st.column <- st.column + String.length s)
+          | Ev (Alignment_spaces i) ->
+             if st.flat = 0 then
+               (st.output.spaces i;
+                st.column <- st.column + i)
+          | Ev (Start_nest i) ->
+             Stack.push st.indent st.indents;
+             st.indent <- st.indent + i
+          | Ev Start_align ->
+             Stack.push st.indent st.indents;
+             st.indent <- st.column
+          | Ev End_nestalign ->
+             (match Stack.pop st.indents with
+               | exception Stack.Empty ->
+                  failwith "badly nested nests or aligns"
+               | i -> st.indent <- i)
+      done
+
+    let evict_overflowed_groups st =
+      let rec check_closed_groups () =
+        match Queue.peek st.closed_groups with
+          | exception Queue.Empty -> ()
+          | Start_group r when st.pos + r.measure > st.width ->
+             ignore (Queue.take st.closed_groups);
+             r.measure <- st.width + 1;
+             check_closed_groups ()
+          | Start_group _ ->
+             ()
+      in
+      check_closed_groups ();
+      let rec check_open_groups () =
+        match CCDeque.peek_front st.open_groups with
+          | Start_group r when st.pos + r.measure > st.width ->
+             ignore (CCDeque.take_front st.open_groups);
+             r.measure <- st.width + 1;
+             check_open_groups ()
+          | exception CCDeque.Empty -> ()
+          | _ -> ()
+      in
+      check_open_groups ()
+  (* conjecture: all the pruned groups occur in the order they appear
+     in the queue, so we can just count the number of evicted groups,
+     and step that far forwards in the queue of pending events. This
+     would avoid the need for the reference too. TODO: I'm pretty sure
+     this isn't true. *)
+
+    let text st txt =
+      let width = String.length txt in
+      if width > 0 then begin
+        (* FIXME: if the item at the head of the queue is a start_group,
+           then switch the order. This reduces the latency of the
+           printer so that text is always output immediately if we
+           aren't waiting for a decision on a line break. *)
+        Queue.push (Ev (Text txt)) st.queue;
+        st.pos <- st.pos + width;
+        evict_overflowed_groups st;
+        layout st
+      end
+
+    let start_group st =
+      let ev = Start_group { measure = - st.pos } in
+      Queue.push (Ev ev) st.queue;
+      CCDeque.push_back st.open_groups ev
+
+    let end_group st =
+      Queue.push (Ev End_group) st.queue;
+      if not (CCDeque.is_empty st.open_groups) then
+        let measurer = CCDeque.take_back st.open_groups in
+        Queue.push measurer st.closed_groups
+
+    (* [flush_closed_groups] sets the final measurement for all
+       unpruned closed groups in the input stream. There may still be
+       unfinished open groups, so we cannot yet necessarily print
+       these groups. *)
+    let flush_closed_groups st =
+      while not (Queue.is_empty st.closed_groups) do
+        match Queue.take st.closed_groups with
+          | Start_group r -> r.measure <- st.pos + r.measure
+      done
+
+    let break st txt =
+      flush_closed_groups st;
+      Queue.push (Ev (Break txt)) st.queue;
+      st.pos <- st.pos + String.length txt;
+      evict_overflowed_groups st;
+      layout st
+
+    let finish st =
+      if not (CCDeque.is_empty st.open_groups) then
+        invalid_arg "Pretty.finish: open groups at end of input";
+      flush_closed_groups st;
+      layout st;
+      assert (Queue.is_empty st.queue)
+
+    let start_nest st i =
+      if i < 0 then invalid_arg "Pretty.nest: negative argument";
+      Queue.push (Ev (Start_nest i)) st.queue
+
+    let end_nest st =
+      Queue.push (Ev End_nestalign) st.queue
+
+    let start_align st =
+      Queue.push (Ev Start_align) st.queue
+
+    let end_align st =
+      Queue.push (Ev End_nestalign) st.queue
+
+    let alignment_spaces st i =
+      if i > 0 then
+        Queue.push (Ev (Alignment_spaces i)) st.queue
+
+end

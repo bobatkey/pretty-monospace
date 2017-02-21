@@ -1,4 +1,4 @@
-(* (C) Robert Atkey 2013, see LICENSE for more information. *)
+(* (C) Robert Atkey 2013-2017, see LICENSE for more information. *)
 
 (** Monospace Pretty Printing *)
 
@@ -15,7 +15,7 @@
    rendered to monospaced output devices by the rendering functions
    listed below.
 
-   The combinator interface of this library is based on Philip
+   FIXME: update this. The combinator interface of this library is based on Philip
    Wadler's {i A Prettier Printer}. The implementation is based on
    Christian Lindig's {i Strictly Pretty}. Some ideas and clarity were
    extracted from Doaitse Swierstra and Olaf Chitil's {i Linear,
@@ -27,7 +27,7 @@
    pretty-printer documents.
 
    {[
-     open Pretty.Combinators
+     open Pretty.Doc
 
      type sexp = Atom of string | List of sexp list
 
@@ -60,7 +60,7 @@
                    ]
             ];;
 
-     Pretty.print_endline (pp_sexp test);;
+     Pretty.Doc.print_endline (pp_sexp test);;
    ]}
    will generate the output:
    {v
@@ -84,7 +84,7 @@
    If we specify a narrower width, the output will be broken
    differently. The command:
    {[
-     Pretty.print_endline ~width:40 (pp_sexp test);;
+     Pretty.Doc.print_endline ~width:40 (pp_sexp test);;
    ]}
    produces:
    {v
@@ -116,7 +116,7 @@
 type document
 
 (** Combinators for building pretty-printer documents. *)
-module Combinators : sig
+module Doc : sig
 
   (** 
      FIXME: Introduction to the combinators: empty and text. break and
@@ -296,7 +296,7 @@ module Combinators : sig
     'a
 
 (**/**)
-  
+
   (* Generate a string representation of the underlying representation
      of a pretty-printer document. This is of interest for debugging
      purposes only. *)
@@ -353,3 +353,37 @@ val custom : ?width:int ->
   output_spaces:(int -> unit) ->
   document ->
   unit
+
+(** Streaming pretty printing. *)
+module Stream : sig
+  type prettifier
+
+  type output =
+    { text    : string -> unit
+    ; newline : unit -> unit
+    ; spaces  : int -> unit
+    }
+
+  val create : int -> output -> prettifier
+
+  val text : prettifier -> string -> unit
+
+  val start_group : prettifier -> unit
+
+  val end_group : prettifier -> unit
+    
+  val break : prettifier -> string -> unit
+
+  val alignment_spaces : prettifier -> int -> unit
+    
+  val start_nest : prettifier -> int -> unit
+
+  val end_nest : prettifier -> unit
+
+  val start_align : prettifier -> unit
+
+  val end_align   : prettifier -> unit
+
+  val finish      : prettifier -> unit
+
+end

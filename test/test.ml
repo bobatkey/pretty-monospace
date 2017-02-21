@@ -595,16 +595,75 @@ module Derived_Combinator_Tests (D : PRETTY_DOC_DERIVED) = struct
 end
 
 module Eager = struct
-  include Pretty.Combinators
+  include Pretty.Doc
   let render width doc = Pretty.render ~width doc
+end
+
+module Streaming = struct
+  type t =
+    | Emp
+    | Concat of t * t
+    | Text of string
+    | Break of string
+    | Alignment_spaces of int
+    | Group of t
+    | Nest of int * t
+    | Align of t
+
+  open Pretty.Stream
+
+  let render width doc =
+    let b = Buffer.create 128 in
+    let output = { text    = Buffer.add_string b
+                 ; newline = (fun () -> Buffer.add_char b '\n')
+                 ; spaces  = (fun n  -> Buffer.add_string b (String.make n ' '))
+                 }
+    in
+    let pp = create width output in
+    let rec render = function
+      | Emp -> ()
+      | Concat (x, y) -> render x; render y
+      | Text s        -> text pp s
+      | Break s       -> break pp s
+      | Alignment_spaces i -> alignment_spaces pp i
+      | Group x ->
+         start_group pp;
+         render x;
+         end_group pp
+      | Nest (i, x) ->
+         start_nest pp i;
+         render x;
+         end_nest pp
+      | Align x ->
+         start_align pp;
+         render x;
+         end_align pp
+    in
+    render doc;
+    finish pp;
+    Buffer.contents b
+
+  let empty = Emp
+  let (^^) x y = Concat (x, y)
+  let text s = Text s
+  let break_with s = Break s
+  let group x = Group x
+  let nest i x =
+    if i < 0 then invalid_arg ("Pretty.nest")
+    else Nest (i,x)
+  let alignment_spaces i =
+    if i < 0 then invalid_arg ("Pretty.alignment_spaces")
+    else Alignment_spaces i
+  let align x = Align x
+
 end
 
 module Eager_Props        = Property_tests (Eager)
 module Eager_Derived      = Derived_Combinator_Tests (Eager)
-module Tests_of_Streaming = Property_tests (Pretty2)
+module Tests_of_Streaming = Property_tests (Streaming)
 module Lindig_Props       = Property_tests (Lindig)
-module Comparison         = Make_comparison_test (Eager) (Pretty2)
-module Comparison2        = Make_comparison_test (Lindig) (Pretty2)
+module Comparison         = Make_comparison_test (Eager) (Streaming)
+module Comparison2        = Make_comparison_test (Lindig) (Streaming)
 
 let _ =
   run_test_tt_main
