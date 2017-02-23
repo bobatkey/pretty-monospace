@@ -1,12 +1,14 @@
 .DEFAULT_GOAL := all
 
 ######################################################################
-.PHONY: all clean install uninstall
+.PHONY: all clean install uninstall always
+
+always:
 
 all: _build/lib/pretty-monospace.cma \
      _build/lib/pretty-monospace.cmxa
 
-_build/%:
+_build/%: always
 	ocamlbuild -use-ocamlfind $*
 
 doc: doc/index.html doc/style.css
