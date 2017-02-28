@@ -33,7 +33,7 @@ body { background-color : White; font-family: "Georgia", "Linux Libertine O"; ma
 tr { background-color : White; }
 td.typefieldcomment { background-color : #FFFFFF ; font-size: smaller }
 pre { margin-bottom: 4px }
-pre.codepre { line-height: 0.7 }
+pre.codepre { line-height: 1.0 }
 div.sig_block {margin-left: 2em}
 hr {/*display:none*/}
 
