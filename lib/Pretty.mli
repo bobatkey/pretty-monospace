@@ -10,8 +10,8 @@
    readable source code output or dumps of internal program values.
 
    The library is structured as a set of combinators (in
-   {!Combinators}) that are used to construct pretty-printer documents
-   (values of type {!document}). Pretty-printer documents can then be
+   {!Doc}) that are used to construct prettyprinter documents
+   (values of type {!document}). Prettyprinter documents can then be
    rendered to monospaced output devices by the rendering functions
    listed below.
 
@@ -24,7 +24,7 @@
    {2 Example: S-Expressions}
 
    The following code implements a converter from s-expressions to
-   pretty-printer documents.
+   prettyprinter documents.
 
    {[
      open Pretty.Doc
@@ -41,7 +41,7 @@
 
    A pretty-printer document generated from an s-expression (or from
    anything else) can be rendered to standard output by calling the
-   {!print_endline} function. For example, the OCaml top-level
+   {!print} function. For example, the OCaml top-level
    declarations:
    {[
      let test =
@@ -73,13 +73,13 @@
    Line breaks have been inserted between sub-elements of each
    parenthesised list in an effort to fit the output into 80 columns
    (the default width). The places where line breaks are inserted
-   corresponds to places were the {!Combinators.break} combinator is
+   corresponds to places were the {!Doc.break} combinator is
    used in the construction of the pretty-printing document. In this
    example, the [pp_sexp] function has placed them between each
    element of each parenthesised list of s-expressions. Decisions on
    whether or not to use line breaks or spaces are made for
    sub-documents of a pretty-printing document delimited by the
-   {!Combinators.group} combinator.
+   {!Doc.group} combinator.
 
    If we specify a narrower width, the output will be broken
    differently. The command:
@@ -103,27 +103,31 @@
    40 characters.
 
    In both cases, the output has been indented. This is the effect of
-   the {!Combinators.nest} combinator, which specifies how much
+   the {!Doc.nest} combinator, which specifies how much
    additional indentation is to be inserted after a line break. The
-   library also provides {!Combinators.align} that sets the
+   library also provides {!Doc.align} that sets the
    intentation for the next line break to be the current column. This
-   is useful for aligning items vertically.
+   is useful for aligning items vertically. *)
 
-   {2 Construction of Pretty-Printer Documents} *)
+(** {2 Types} *)
 
-(** Type of pretty-printer documents. Use the combinators in
-    {!Combinators} to construct values of this type. *)
+type output
+(** Type of output specifications. Use the functions in {!Output} to
+   construct values of this type. *)
+
 type document
+(** Type of pretty-printer documents. Use the functions in {!Doc} to
+    construct values of this type. *)
 
-(** Combinators for building pretty-printer documents. *)
+type prettifier
+(** Type of streaming pretty-printers. Use the functions in
+   {!Stream} to construct streaming pretty-printers and to use
+   them. *)
+
+(** {2 Pretty-Printer Documents} *)
+
+(** Pretty-printer documents. *)
 module Doc : sig
-
-  (** 
-     FIXME: Introduction to the combinators: empty and text. break and
-     group. hardbreak. alignment_spaces. nest and align.
-
-     FIXME: the derived combinators
-  *)
 
   (** The abstract type of documents. This type declaration is here to
       enable this module to be used as a functor argument. *)
@@ -273,6 +277,8 @@ module Doc : sig
       arr)]. *)
   val wrap_array : t -> t array -> t
 
+  (** {2 Inspection of pretty-printer documents}*)
+
   (** [fold ~empty ~concat ~text ~break ~alignspaces ~nest ~align
      ~group doc] visits the nodes representing [doc] and calls the
      appropriate function argument on each one. Note that the
@@ -295,95 +301,122 @@ module Doc : sig
     document ->
     'a
 
-(**/**)
+  (**{2 Rendering of Prettyprinter Documents}
 
-  (* Generate a string representation of the underlying representation
-     of a pretty-printer document. This is of interest for debugging
-     purposes only. *)
-  val to_string : t -> string
+     The printing functions take an optional [width] argument that
+     controls the decisions on whether to format each group in the
+     document with or without linebreaks. In short, if there is enough
+     space left on the current line (i.e., from the current position
+     up to [width]) to format a group without line breaks, then the
+     group is formatted without line breaks. Otherwise the group is
+     formatted with line breaks.
+
+     The optional [width] argument defaults to [80] in all the
+     functions listed below.
+
+     Note that specifying the [width] argument does not guarantee that
+     the output will never exceed the given width. Uses of the base
+     {!text} combinator will never be broken, and uses of {!nest} can
+     force indentations above the specified width. *)
+
+  val format : output -> ?width:int -> t -> unit
+
+  val print : ?width:int -> t -> unit
 end
 
-(**{2 Rendering} 
-
-   Each of the rendering functions below takes an optional [width]
-   argument that controls the decisions on whether to format each
-   group in the document with or without linebreaks. In short, if
-   there is enough space left on the current line (i.e., from the
-   current position up to [width]) to format a group without line
-   breaks, then the group is formatted without line breaks. Otherwise
-   the group is formatted with line breaks.
-
-   The optional [width] argument defaults to [80] in all the functions
-   listed below.
-
-   Note that specifying the [width] argument does not guarantee that
-   the output will never exceed the given width. Uses of the base
-   {!Combinators.text} combinator will never be broken, and uses of
-   {!Combinators.nest} can force indentations above the specified
-   width. *)
-
-(** Pretty-print a document to [stdout]. *)
-val print : ?width:int -> document -> unit
-
-(** Pretty-print a document to [stdout], followed by a newline
-    character. *)
-val print_endline : ?width:int -> document -> unit
-
-(** Pretty-print a document to [stderr]. *)
-val prerr : ?width:int -> document -> unit
-
-(** Pretty-print a document to [stderr], followed by a newline
-    character. *)
-val prerr_endline : ?width:int -> document -> unit
-
-(** Pretty-print a document to an {!Pervasives.out_channel}. *)
-val output : ?width:int -> out_channel -> document -> unit
-
-(** Pretty-print a document to an {!Pervasives.out_channel}, followed
-    by a newline. *)
-val output_endline : ?width:int -> out_channel -> document -> unit
-
-(** Pretty-print a document to a string. *)
-val render : ?width:int -> document -> string
-
-(** Format a document with custom output functions. *)
-val custom : ?width:int ->
-  output_text:(string -> unit) ->
-  output_newline:(unit -> unit) ->
-  output_spaces:(int -> unit) ->
-  document ->
-  unit
+(** {2 Streaming pretty printing} *)
 
 (** Streaming pretty printing. *)
 module Stream : sig
-  type prettifier
 
-  type output =
-    { text    : string -> unit
-    ; newline : unit -> unit
-    ; spaces  : int -> unit
-    }
+  type t = prettifier
+  (** Type of streaming pretty printers. Use {!create} to construct a
+      fresh streaming pretty printer. *)
 
-  val create : int -> output -> prettifier
+  val create : ?width:int -> output -> t
+  (** [create ?width out] creates a new streaming pretty printer that
+     performs output using [out]. The optional [width] argument
+     specifies the target width used for making line break
+     decisions. *)
 
-  val text : prettifier -> string -> unit
+  val text : t -> string -> unit
+  (** [text pp s] signals to the prettyprinter [pp] to print the text
+     [s]. The string [s] should not contain newline characters. If it
+     does, then the automatic linebreaking will not operate
+     correctly. *)
 
-  val start_group : prettifier -> unit
+  val start_group : t -> unit
+  (** [start_group pp] starts a new group for the purposes of making
+     line breaking decisions. Every group should be terminated by a
+     corresponding {!end_group}. Groups should be correctly nested
+     with respect to {!start_align}/{!start_nest} and
+     {!end_nest_or_align} pairs. *)
 
-  val end_group : prettifier -> unit
-    
-  val break : prettifier -> string -> unit
+  val end_group : t -> unit
+  (** [end_group pp] ends a break-decision group started by
+      {!start_group}. *)
 
-  val alignment_spaces : prettifier -> int -> unit
-    
-  val start_nest : prettifier -> int -> unit
+  val break : t -> string -> unit
+  (** [break pp s] signals the prettyprinter [pp] to emit the string
+     [s] if in flat mode, or a newline and indentation to the current
+     indentation level if in breaking mode. Decisions about whether to
+     be in flat or breaking mode are made at the group level. Groups
+     are indicated by {!start_group} and {!end_group}. *)
 
-  val end_nest : prettifier -> unit
+  val alignment_spaces : t -> int -> unit
+  (** [alignment_spaces pp i] signals the prettyprinter [pp] to emit
+     [n] spaces if in breaking mode, or nothing if in flat
+     mode. Spaces produced by this combinator are not counted for the
+     purposes of measuring groups. *)
 
-  val start_align : prettifier -> unit
+  val start_nest : t -> int -> unit
+  (** [start_nest pp i] opens a nest block and adds [i] to the current
+     indentation level. Every such block must be closed by an
+     {!end_nest_or_align}, and must be correctly nested with respect
+     to {!start_group}-{!end_group} blocks. *)
 
-  val end_align   : prettifier -> unit
+  val start_align : t -> unit
+  (** [start_align pp] opens an block in which the indentation level
+     is set to the current column. Every such block must be closed by
+     an {!end_nest_or_align}, and must be correctly nested with
+     respect to {!start_group}-{!end_group} blocks. *)
 
-  val finish      : prettifier -> unit
+  val end_nest_or_align : t -> unit
+  (** [end_nest_or_align pp] closes a nest block opened by
+     {!start_nest} or {!start_align}. *)
+
+  val flush : t -> unit
+  (** [flush pp] flushes the current state of the prettyprinter
+     [pp]. There must be no open groups or indentation blocks. *)
 
 end
+
+(** {2 Output Specifications} *)
+
+(** Output specifications for pretty-printing jobs. *)
+module Output : sig
+
+  type t = output
+  (** Type of output specifications for pretty-printing jobs. *)
+
+  val stdout : t
+  (** Output to [stdout]. *)
+
+  val stderr : t
+  (** Output to [stderr]. *)
+
+  val to_channel : out_channel -> t
+  (** Output to the specified output channel. *)
+
+  val to_buffer : Buffer.t -> t
+  (** Output to a buffer. *)
+
+  val custom :
+    text:(string -> unit) ->
+    newline:(unit -> unit) ->
+    spaces:(int -> unit) ->
+    t
+    (** Custom output specification. *)
+
+end
+

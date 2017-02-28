@@ -596,7 +596,11 @@ end
 
 module Eager = struct
   include Pretty.Doc
-  let render width doc = Pretty.render ~width doc
+  let render width doc =
+    let b      = Buffer.create 128 in
+    let output = Pretty.Output.to_buffer b in
+    Pretty.Doc.format output ~width doc;
+    Buffer.contents b
 end
 
 module Streaming = struct
@@ -614,12 +618,8 @@ module Streaming = struct
 
   let render width doc =
     let b = Buffer.create 128 in
-    let output = { text    = Buffer.add_string b
-                 ; newline = (fun () -> Buffer.add_char b '\n')
-                 ; spaces  = (fun n  -> Buffer.add_string b (String.make n ' '))
-                 }
-    in
-    let pp = create width output in
+    let output = Pretty.Output.to_buffer b in
+    let pp = create output ~width in
     let rec render = function
       | Emp -> ()
       | Concat (x, y) -> render x; render y
@@ -633,14 +633,14 @@ module Streaming = struct
       | Nest (i, x) ->
          start_nest pp i;
          render x;
-         end_nest pp
+         end_nest_or_align pp
       | Align x ->
          start_align pp;
          render x;
-         end_align pp
+         end_nest_or_align pp
     in
     render doc;
-    finish pp;
+    flush pp;
     Buffer.contents b
 
   let empty = Emp

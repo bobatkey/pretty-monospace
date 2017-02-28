@@ -1,5 +1,49 @@
 (* (C) Robert Atkey 2013-2017, see LICENSE for more information. *)
 
+module Output = struct
+  type t =
+    { text    : string -> unit
+    ; newline : unit -> unit
+    ; spaces  : int -> unit
+    }
+
+  let n_spaces = 20
+
+  let ready_made_spaces = String.make n_spaces ' '
+
+  let to_channel ch =
+    let text s = output_string ch s in
+    let newline () = output_char ch '\n' in
+    let rec spaces i =
+      if i = 0 then ()
+      else if i < n_spaces then
+        output_substring ch ready_made_spaces 0 i
+      else
+        (output_string ch ready_made_spaces;
+         spaces (i - n_spaces))
+    in
+    { text; newline; spaces }
+
+  let stdout = to_channel stdout
+  let stderr = to_channel stderr
+
+  let to_buffer buf =
+    let text s = Buffer.add_string buf s in
+    let newline () = Buffer.add_char buf '\n' in
+    let rec spaces i =
+      if i = 0 then ()
+      else if i < n_spaces then
+        Buffer.add_substring buf ready_made_spaces 0 i
+      else
+        (Buffer.add_string buf ready_made_spaces;
+         spaces (i - n_spaces))
+    in
+    { text; newline; spaces }
+
+  let custom ~text ~newline ~spaces =
+    { text; newline; spaces }
+end
+
 module Doc = struct
   type document =
     { node       : document_node
@@ -50,16 +94,6 @@ module Doc = struct
     | `NoBreak -> break_dist + bd
 
   type t = document
-
-  let rec to_string {node} = match node with
-    | Empty         -> "Empty"
-    | Concat(d1,d2) -> "Concat(" ^ to_string d1 ^ "," ^ to_string d2 ^ ")"
-    | Text(t)       -> "Text(\""^String.escaped t^"\")"
-    | Nest(n,d)     -> "Nest("^string_of_int n^","^to_string d^")"
-    | Break(s)      -> "Break(\""^String.escaped s^"\")"
-    | AlignSpaces i -> "AlignSpaces("^string_of_int i^")"
-    | Align d       -> "Align("^to_string d^")"
-    | Group d       -> "Group("^to_string d^")"
 
   let empty =
     { node       = Empty
@@ -245,6 +279,41 @@ module Doc = struct
     in
     fold 0 doc
 
+  let format out ?(width=80) doc =
+    let open Output in
+    let rec flat = function
+      | {node=Empty | AlignSpaces _}          -> ()
+      | {node=Concat (x,y)}                   -> flat x; flat y
+      | {node=Text s | Break s}               -> out.text s
+      | {node=Align x | Nest (_,x) | Group x} -> flat x
+    in
+    let rec process column bd i = function
+      | {node=Empty} -> column
+      | {node=Concat (x,y)} ->
+         let column = process column (y +/ bd) i x in
+         process column bd i y
+      | {node=Text s} ->
+         out.text s; column + String.length s
+      | {node=AlignSpaces n} ->
+         out.spaces n; column + n
+      | {node=Align x} ->
+         process column bd column x
+      | {node=Nest (j, x)} ->
+         process column bd (i+j) x
+      | {node=Break _} ->
+         out.newline (); out.spaces i; i
+      | {node=Group x; flat_width} ->
+         if width - column - flat_width >= bd then
+           (flat x;
+            column + flat_width)
+         else
+           process column bd i x
+    in
+    ignore (process 0 0 0 doc)
+
+  let print ?width doc =
+    format Output.stdout ?width doc
+
 (*
   let render text newline spaces width doc =
     ignore @@ fold
@@ -267,90 +336,7 @@ module Doc = struct
 *)
 end
 
-type document = Doc.t
-
-open Doc
-
-  let format text newline spaces width doc =
-    let rec flat = function
-      | {node=Empty | AlignSpaces _}          -> ()
-      | {node=Concat (x,y)}                   -> flat x; flat y
-      | {node=Text s | Break s}               -> text s
-      | {node=Align x | Nest (_,x) | Group x} -> flat x
-    in
-    let rec process column bd i = function
-      | {node=Empty} -> column
-      | {node=Concat (x,y)} ->
-         let column = process column (y +/ bd) i x in
-         process column bd i y
-      | {node=Text s} ->
-         text s; column + String.length s
-      | {node=AlignSpaces n} ->
-         spaces n; column + n
-      | {node=Align x} ->
-         process column bd column x
-      | {node=Nest (j, x)} ->
-         process column bd (i+j) x
-      | {node=Break _} ->
-         newline (); spaces i; i
-      | {node=Group x; flat_width} ->
-         if width - column - flat_width >= bd then
-           (flat x;
-            column + flat_width)
-         else
-           process column bd i x
-    in
-    ignore (process 0 0 0 doc)
-
-  let output ?(width=80) ch doc =
-    format
-      (fun s  -> output_string ch s)
-      (fun () -> output_char ch '\n')
-      (fun n  -> output_string ch (String.make n ' '))
-      width
-      doc
-
-  let output_endline ?(width=80) ch doc =
-    output ~width ch doc;
-    output_char ch '\n'
-
-  let print ?(width=80) doc =
-    output ~width stdout doc
-
-  let print_endline ?(width=80) doc =
-    output_endline ~width stdout doc
-
-  let prerr ?(width=80) doc =
-    output ~width stderr doc
-
-  let prerr_endline ?(width=80) doc =
-    output_endline ~width stderr doc
-
-  let render ?(width=80) doc =
-    let b = Buffer.create 2048 in
-    format
-      (fun s  -> Buffer.add_string b s)
-      (fun () -> Buffer.add_char b '\n')
-      (fun n  -> Buffer.add_string b (String.make n ' '))
-      width
-      doc;
-    Buffer.contents b
-
-  let custom ?(width=80) ~output_text ~output_newline ~output_spaces doc =
-    format
-      output_text
-      output_newline
-      output_spaces
-      width
-      doc
-
 module Stream = struct
-
-  type output =
-    { text    : string -> unit
-    ; newline : unit -> unit
-    ; spaces  : int -> unit
-    }
 
   type not_group
   type is_group
@@ -371,12 +357,12 @@ module Stream = struct
   type event =
     | Ev : _ event' -> event [@@ocaml.unboxed]
 
-  type prettifier =
+  type t =
     { width            : int
     (** The target width, used for making decisions about line
         breaks. *)
 
-    ; output           : output
+    ; output           : Output.t
     (** The output functions. *)
 
     (* measurement *)
@@ -396,7 +382,7 @@ module Stream = struct
     ;         indents  : int Stack.t
     }
 
-    let create width output =
+    let create ?(width=80) output =
       { queue         = Queue.create ()
       ; pos           = 1 (* count from 1 so we can represent measuring
                              tasks by negative numbers and not get
@@ -412,6 +398,7 @@ module Stream = struct
       }
 
     let layout st =
+      let open Output in
       (* whenever we get stuck in layout, the head of the queue will
          always be a Start_group, and the start_groups will always be in
          the order they are in the open_ and closed_groups queues.
@@ -531,7 +518,7 @@ module Stream = struct
       evict_overflowed_groups st;
       layout st
 
-    let finish st =
+    let flush st =
       if not (CCDeque.is_empty st.open_groups) then
         invalid_arg "Pretty.finish: open groups at end of input";
       flush_closed_groups st;
@@ -542,13 +529,10 @@ module Stream = struct
       if i < 0 then invalid_arg "Pretty.nest: negative argument";
       Queue.push (Ev (Start_nest i)) st.queue
 
-    let end_nest st =
-      Queue.push (Ev End_nestalign) st.queue
-
     let start_align st =
       Queue.push (Ev Start_align) st.queue
 
-    let end_align st =
+    let end_nest_or_align st =
       Queue.push (Ev End_nestalign) st.queue
 
     let alignment_spaces st i =
@@ -556,3 +540,9 @@ module Stream = struct
         Queue.push (Ev (Alignment_spaces i)) st.queue
 
 end
+
+type document = Doc.t
+
+type output = Output.t
+
+type prettifier = Stream.t
