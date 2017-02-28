@@ -6,9 +6,11 @@ authors: "Robert Atkey <bob.atkey@gmail.com>"
 homepage: ""
 bug-reports: ""
 license: ""
-build: [ [ "make" ] ]
-install: [ "make" "install" ]
-remove: [ "make" "uninstall" ]
+build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" ]
 depends: [ "ocamlfind" {build}
            "ocamlbuild" {build}
+           "topkg" {build}
          ]
+build-test: [
+ [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "true" ]
+ [ "ocaml" "pkg/pkg.ml" "test" ]]
