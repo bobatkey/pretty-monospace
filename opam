@@ -3,9 +3,10 @@ name: "pretty-monospace"
 version: "0.1"
 maintainer: "Robert Atkey <bob.atkey@gmail.com>"
 authors: "Robert Atkey <bob.atkey@gmail.com>"
-homepage: ""
-bug-reports: ""
-license: ""
+homepage: "https://github.com/bobatkey/pretty-monospace"
+dev-repo: "https://github.com/bobatkey/pretty-monospace"
+bug-reports: "https://github.com/bobatkey/pretty-monospace"
+license: "BSD-3-Clause"
 build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" ]
 depends: [ "ocamlfind" {build}
            "ocamlbuild" {build}
