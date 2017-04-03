@@ -339,6 +339,75 @@ module Doc = struct
 *)
 end
 
+module Deque : sig
+  type 'a t
+  exception Empty
+  val create : unit -> 'a t
+  val peek_front : 'a t -> 'a
+  val take_front : 'a t -> 'a
+  val push_back  : 'a t -> 'a -> unit
+  val take_back  : 'a t -> 'a
+  val is_empty   : 'a t -> bool
+end = struct
+  type 'a node =
+    { data : 'a
+    ; mutable next : 'a node option
+    ; mutable prev : 'a node option
+    }
+
+  type 'a t =
+    { mutable front : 'a node option
+    ; mutable back  : 'a node option
+    }
+
+  exception Empty
+
+  let create () =
+    { front = None; back = None }
+
+  let peek_front {front} =
+    match front with
+      | None -> raise Empty
+      | Some {data} -> data
+
+  let take_front deque =
+    match deque.front with
+      | None ->
+         raise Empty
+      | Some {prev=None;data} ->
+         deque.front <- None;
+         deque.back <- None;
+         data
+      | Some {prev=Some node as prev;data} ->
+         node.next <- None;
+         deque.front <- prev;
+         data
+
+  let push_back deque data =
+    let node = Some { data; next = deque.back; prev = None } in
+    match deque.back with
+      | None -> deque.front <- node; deque.back <- node
+      | Some node' ->
+         node'.prev <- node;
+         deque.back <- node
+
+  let take_back deque =
+    match deque.back with
+      | None ->
+         raise Empty
+      | Some {next=None;data} ->
+         deque.front <- None;
+         deque.back <- None;
+         data
+      | Some {next=Some node as next;data} ->
+         node.prev <- None;
+         deque.back <- next;
+         data
+
+  let is_empty deque =
+    match deque.front with None -> true | Some _ -> false
+end
+
 module Stream = struct
 
   type not_group
@@ -372,10 +441,10 @@ module Stream = struct
     (* measurement *)
     ; queue            : event Queue.t
     (** Queue of events that are waiting on the resolution of group
-              sizes. *)
+        sizes. *)
     ; mutable pos      : int
     (** The absolute position in the input, if everything was flat. *)
-    ; open_groups      : is_group event' CCDeque.t
+    ; open_groups      : is_group event' Deque.t
     ; closed_groups    : is_group event' Queue.t
 
     (* layout state *)
@@ -391,7 +460,7 @@ module Stream = struct
     ; pos           = 1 (* count from 1 so we can represent measuring
                            tasks by negative numbers and not get
                            confused by 0-width groups *)
-    ; open_groups   = CCDeque.create ()
+    ; open_groups   = Deque.create ()
     ; closed_groups = Queue.create ()
     ; output
     ; width
@@ -480,12 +549,12 @@ module Stream = struct
     in
     check_closed_groups ();
     let rec check_open_groups () =
-      match CCDeque.peek_front st.open_groups with
+      match Deque.peek_front st.open_groups with
         | Start_group r when st.pos + r.measure > st.width ->
-           ignore (CCDeque.take_front st.open_groups);
+           ignore (Deque.take_front st.open_groups);
            r.measure <- st.width + 1;
            check_open_groups ()
-        | exception CCDeque.Empty ->
+        | exception Deque.Empty ->
            ()
         | _ ->
            ()
@@ -519,18 +588,17 @@ module Stream = struct
   let start_group st =
     let ev = Start_group { measure = - st.pos } in
     Queue.push (Ev ev) st.queue;
-    CCDeque.push_back st.open_groups ev
+    Deque.push_back st.open_groups ev
 
   let end_group st =
     Queue.push (Ev End_group) st.queue;
-    if not (CCDeque.is_empty st.open_groups) then
-      let measurer = CCDeque.take_back st.open_groups in
+    if not (Deque.is_empty st.open_groups) then
+      let measurer = Deque.take_back st.open_groups in
       Queue.push measurer st.closed_groups
 
-  (* [flush_closed_groups] sets the final measurement for all
-     unpruned closed groups in the input stream. There may still be
-     unfinished open groups, so we cannot yet necessarily print
-     these groups. *)
+  (* [flush_closed_groups] sets the final measurement for all unpruned
+     closed groups in the input stream. There may still be unfinished
+     open groups, so we cannot yet necessarily print these groups. *)
   let flush_closed_groups st =
     while not (Queue.is_empty st.closed_groups) do
       match Queue.take st.closed_groups with
@@ -545,7 +613,7 @@ module Stream = struct
     layout st
 
   let flush st =
-    if not (CCDeque.is_empty st.open_groups) then
+    if not (Deque.is_empty st.open_groups) then
       invalid_arg "Pretty.finish: open groups at end of input";
     flush_closed_groups st;
     layout st;

@@ -1,4 +1,4 @@
-true: package(containers.data), safe_string, bin_annot
+true: safe_string, bin_annot
 
 <lib> : include
 
