@@ -341,9 +341,14 @@ module Stream : sig
 
   val text : t -> string -> unit
   (** [text pp s] signals to the prettyprinter [pp] to print the text
-     [s]. The string [s] should not contain newline characters. If it
-     does, then the automatic linebreaking will not operate
-     correctly. *)
+      [s]. The string [s] should not contain newline characters. If it
+      does, then the automatic linebreaking will not operate
+      correctly. *)
+
+  val char : t -> char -> unit
+  (** [char pp c] signals to the prettyprinter [pp] to print the char
+      [c]. The char [c] should not be a newline character. If it is,
+      then the automatic linebreaking will not operate correctly. *)
 
   val start_group : t -> unit
   (** [start_group pp] starts a new group for the purposes of making
@@ -413,6 +418,7 @@ module Output : sig
 
   val custom :
     text:(string -> unit) ->
+    char:(char -> unit) ->
     newline:(unit -> unit) ->
     spaces:(int -> unit) ->
     t

@@ -3,6 +3,7 @@
 module Output = struct
   type t =
     { text    : string -> unit
+    ; char    : char -> unit
     ; newline : unit -> unit
     ; spaces  : int -> unit
     }
@@ -13,6 +14,7 @@ module Output = struct
 
   let to_channel ch =
     let text s = output_string ch s in
+    let char c = output_char ch c in
     let newline () = output_char ch '\n' in
     let rec spaces i =
       if i = 0 then ()
@@ -22,13 +24,14 @@ module Output = struct
         (output_string ch ready_made_spaces;
          spaces (i - n_spaces))
     in
-    { text; newline; spaces }
+    { text; char; newline; spaces }
 
   let stdout = to_channel stdout
   let stderr = to_channel stderr
 
   let to_buffer buf =
     let text s = Buffer.add_string buf s in
+    let char c = Buffer.add_char buf c in
     let newline () = Buffer.add_char buf '\n' in
     let rec spaces i =
       if i = 0 then ()
@@ -38,10 +41,10 @@ module Output = struct
         (Buffer.add_string buf ready_made_spaces;
          spaces (i - n_spaces))
     in
-    { text; newline; spaces }
+    { text; char; newline; spaces }
 
-  let custom ~text ~newline ~spaces =
-    { text; newline; spaces }
+  let custom ~text ~char ~newline ~spaces =
+    { text; char; newline; spaces }
 end
 
 module Doc = struct
@@ -343,6 +346,7 @@ module Stream = struct
 
   type _ event' =
     | Text : string -> not_group event'
+    | Char : char -> not_group event'
 
     | Start_group : { mutable measure : int } -> is_group event'
     | End_group : not_group event'
@@ -382,162 +386,171 @@ module Stream = struct
     ;         indents  : int Stack.t
     }
 
-    let create ?(width=80) output =
-      { queue         = Queue.create ()
-      ; pos           = 1 (* count from 1 so we can represent measuring
-                             tasks by negative numbers and not get
-                             confused by 0-width groups *)
-      ; open_groups   = CCDeque.create ()
-      ; closed_groups = Queue.create ()
-      ; output
-      ; width
-      ; flat          = 0
-      ; column        = 0
-      ; indent        = 0
-      ; indents       = Stack.create ()
-      }
+  let create ?(width=80) output =
+    { queue         = Queue.create ()
+    ; pos           = 1 (* count from 1 so we can represent measuring
+                           tasks by negative numbers and not get
+                           confused by 0-width groups *)
+    ; open_groups   = CCDeque.create ()
+    ; closed_groups = Queue.create ()
+    ; output
+    ; width
+    ; flat          = 0
+    ; column        = 0
+    ; indent        = 0
+    ; indents       = Stack.create ()
+    }
 
-    let layout st =
-      let open Output in
-      (* whenever we get stuck in layout, the head of the queue will
-         always be a Start_group, and the start_groups will always be in
-         the order they are in the open_ and closed_groups queues.
+  let layout st =
+    let open Output in
+    (* whenever we get stuck in layout, the head of the queue will
+       always be a Start_group, and the start_groups will always be in
+       the order they are in the open_ and closed_groups queues.
 
-         This means that we know how far to step through the queue by
-         counting the number of start_groups that have been evicted in the
-         last overflow check, or now have fixed measures instead of
-         dynamically checking them. *)
-      let is_live = function
-        | Ev (Start_group {measure}) when measure < 0 -> false
-        | _ -> true
-      in
-      while not (Queue.is_empty st.queue) && is_live (Queue.peek st.queue) do
-        match Queue.take st.queue with
-          | Ev (Text s) ->
-             st.output.text s;
-             st.column <- st.column + String.length s
-          | Ev (Start_group _) when st.flat > 0 ->
-             st.flat <- st.flat + 1
-          | Ev (Start_group {measure}) when st.column + measure <= st.width ->
-             st.flat <- 1
-          | Ev (Start_group _) ->
-             ()
-          | Ev End_group ->
-             if st.flat > 0 then st.flat <- st.flat - 1
-          | Ev (Break s) ->
-             if st.flat = 0 then
-               (st.output.newline ();
-                st.output.spaces st.indent;
-                st.column <- st.indent)
-             else
-               (st.output.text s;
-                st.column <- st.column + String.length s)
-          | Ev (Alignment_spaces i) ->
-             if st.flat = 0 then
-               (st.output.spaces i;
-                st.column <- st.column + i)
-          | Ev (Start_nest i) ->
-             Stack.push st.indent st.indents;
-             st.indent <- st.indent + i
-          | Ev Start_align ->
-             Stack.push st.indent st.indents;
-             st.indent <- st.column
-          | Ev End_nestalign ->
-             (match Stack.pop st.indents with
-               | exception Stack.Empty ->
-                  failwith "badly nested nests or aligns"
-               | i -> st.indent <- i)
-      done
+       This means that we know how far to step through the queue by
+       counting the number of start_groups that have been evicted in the
+       last overflow check, or now have fixed measures instead of
+       dynamically checking them. *)
+    let is_live = function
+      | Ev (Start_group {measure}) when measure < 0 -> false
+      | _ -> true
+    in
+    while not (Queue.is_empty st.queue) && is_live (Queue.peek st.queue) do
+      match Queue.take st.queue with
+        | Ev (Text s) ->
+           st.output.text s;
+           st.column <- st.column + String.length s
+        | Ev (Char c) ->
+           st.output.char c;
+           st.column <- st.column + 1
+        | Ev (Start_group _) when st.flat > 0 ->
+           st.flat <- st.flat + 1
+        | Ev (Start_group {measure}) when st.column + measure <= st.width ->
+           st.flat <- 1
+        | Ev (Start_group _) ->
+           ()
+        | Ev End_group ->
+           if st.flat > 0 then st.flat <- st.flat - 1
+        | Ev (Break s) ->
+           if st.flat = 0 then
+             (st.output.newline ();
+              st.output.spaces st.indent;
+              st.column <- st.indent)
+           else
+             (st.output.text s;
+              st.column <- st.column + String.length s)
+        | Ev (Alignment_spaces i) ->
+           if st.flat = 0 then
+             (st.output.spaces i;
+              st.column <- st.column + i)
+        | Ev (Start_nest i) ->
+           Stack.push st.indent st.indents;
+           st.indent <- st.indent + i
+        | Ev Start_align ->
+           Stack.push st.indent st.indents;
+           st.indent <- st.column
+        | Ev End_nestalign ->
+           (match Stack.pop st.indents with
+             | exception Stack.Empty ->
+                failwith "badly nested nests or aligns"
+             | i -> st.indent <- i)
+    done
 
-    let evict_overflowed_groups st =
-      let rec check_closed_groups () =
-        match Queue.peek st.closed_groups with
-          | exception Queue.Empty -> ()
-          | Start_group r when st.pos + r.measure > st.width ->
-             ignore (Queue.take st.closed_groups);
-             r.measure <- st.width + 1;
-             check_closed_groups ()
-          | Start_group _ ->
-             ()
-      in
-      check_closed_groups ();
-      let rec check_open_groups () =
-        match CCDeque.peek_front st.open_groups with
-          | Start_group r when st.pos + r.measure > st.width ->
-             ignore (CCDeque.take_front st.open_groups);
-             r.measure <- st.width + 1;
-             check_open_groups ()
-          | exception CCDeque.Empty -> ()
-          | _ -> ()
-      in
-      check_open_groups ()
+  let evict_overflowed_groups st =
+    let rec check_closed_groups () =
+      match Queue.peek st.closed_groups with
+        | exception Queue.Empty -> ()
+        | Start_group r when st.pos + r.measure > st.width ->
+           ignore (Queue.take st.closed_groups);
+           r.measure <- st.width + 1;
+           check_closed_groups ()
+        | Start_group _ ->
+           ()
+    in
+    check_closed_groups ();
+    let rec check_open_groups () =
+      match CCDeque.peek_front st.open_groups with
+        | Start_group r when st.pos + r.measure > st.width ->
+           ignore (CCDeque.take_front st.open_groups);
+           r.measure <- st.width + 1;
+           check_open_groups ()
+        | exception CCDeque.Empty -> ()
+        | _ -> ()
+    in
+    check_open_groups ()
   (* conjecture: all the pruned groups occur in the order they appear
      in the queue, so we can just count the number of evicted groups,
      and step that far forwards in the queue of pending events. This
      would avoid the need for the reference too. TODO: I'm pretty sure
      this isn't true. *)
 
-    let text st txt =
-      let width = String.length txt in
-      if width > 0 then begin
-        (* FIXME: if the item at the head of the queue is a start_group,
-           then switch the order. This reduces the latency of the
-           printer so that text is always output immediately if we
-           aren't waiting for a decision on a line break. *)
-        Queue.push (Ev (Text txt)) st.queue;
-        st.pos <- st.pos + width;
-        evict_overflowed_groups st;
-        layout st
-      end
-
-    let start_group st =
-      let ev = Start_group { measure = - st.pos } in
-      Queue.push (Ev ev) st.queue;
-      CCDeque.push_back st.open_groups ev
-
-    let end_group st =
-      Queue.push (Ev End_group) st.queue;
-      if not (CCDeque.is_empty st.open_groups) then
-        let measurer = CCDeque.take_back st.open_groups in
-        Queue.push measurer st.closed_groups
-
-    (* [flush_closed_groups] sets the final measurement for all
-       unpruned closed groups in the input stream. There may still be
-       unfinished open groups, so we cannot yet necessarily print
-       these groups. *)
-    let flush_closed_groups st =
-      while not (Queue.is_empty st.closed_groups) do
-        match Queue.take st.closed_groups with
-          | Start_group r -> r.measure <- st.pos + r.measure
-      done
-
-    let break st txt =
-      flush_closed_groups st;
-      Queue.push (Ev (Break txt)) st.queue;
-      st.pos <- st.pos + String.length txt;
+  let text st txt =
+    let width = String.length txt in
+    if width > 0 then begin
+      (* FIXME: if the item at the head of the queue is a start_group,
+         then switch the order. This reduces the latency of the
+         printer so that text is always output immediately if we
+         aren't waiting for a decision on a line break. *)
+      Queue.push (Ev (Text txt)) st.queue;
+      st.pos <- st.pos + width;
       evict_overflowed_groups st;
       layout st
+    end
 
-    let flush st =
-      if not (CCDeque.is_empty st.open_groups) then
-        invalid_arg "Pretty.finish: open groups at end of input";
-      flush_closed_groups st;
-      layout st;
-      assert (Queue.is_empty st.queue)
+  let char st c =
+    Queue.push (Ev (Char c)) st.queue;
+    st.pos <- st.pos + 1;
+    evict_overflowed_groups st;
+    layout st
 
-    let start_nest st i =
-      if i < 0 then invalid_arg "Pretty.nest: negative argument";
-      Queue.push (Ev (Start_nest i)) st.queue
+  let start_group st =
+    let ev = Start_group { measure = - st.pos } in
+    Queue.push (Ev ev) st.queue;
+    CCDeque.push_back st.open_groups ev
 
-    let start_align st =
-      Queue.push (Ev Start_align) st.queue
+  let end_group st =
+    Queue.push (Ev End_group) st.queue;
+    if not (CCDeque.is_empty st.open_groups) then
+      let measurer = CCDeque.take_back st.open_groups in
+      Queue.push measurer st.closed_groups
 
-    let end_nest_or_align st =
-      Queue.push (Ev End_nestalign) st.queue
+  (* [flush_closed_groups] sets the final measurement for all
+     unpruned closed groups in the input stream. There may still be
+     unfinished open groups, so we cannot yet necessarily print
+     these groups. *)
+  let flush_closed_groups st =
+    while not (Queue.is_empty st.closed_groups) do
+      match Queue.take st.closed_groups with
+        | Start_group r -> r.measure <- st.pos + r.measure
+    done
 
-    let alignment_spaces st i =
-      if i > 0 then
-        Queue.push (Ev (Alignment_spaces i)) st.queue
+  let break st txt =
+    flush_closed_groups st;
+    Queue.push (Ev (Break txt)) st.queue;
+    st.pos <- st.pos + String.length txt;
+    evict_overflowed_groups st;
+    layout st
+
+  let flush st =
+    if not (CCDeque.is_empty st.open_groups) then
+      invalid_arg "Pretty.finish: open groups at end of input";
+    flush_closed_groups st;
+    layout st;
+    assert (Queue.is_empty st.queue)
+
+  let start_nest st i =
+    if i < 0 then invalid_arg "Pretty.nest: negative argument";
+    Queue.push (Ev (Start_nest i)) st.queue
+
+  let start_align st =
+    Queue.push (Ev Start_align) st.queue
+
+  let end_nest_or_align st =
+    Queue.push (Ev End_nestalign) st.queue
+
+  let alignment_spaces st i =
+    if i > 0 then
+      Queue.push (Ev (Alignment_spaces i)) st.queue
 
 end
 
