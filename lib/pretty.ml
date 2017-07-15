@@ -362,7 +362,7 @@ module Stream = struct
     | Ev : _ event' -> event [@@ocaml.unboxed]
 
   type t =
-    { width            : int
+    { mutable width    : int
     (** The target width, used for making decisions about line
         breaks. *)
 
@@ -400,6 +400,9 @@ module Stream = struct
     ; indent        = 0
     ; indents       = Stack.create ()
     }
+
+  let set_width t new_width =
+    t.width <- new_width
 
   let layout st =
     let open Output in

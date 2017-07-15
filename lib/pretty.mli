@@ -339,6 +339,14 @@ module Stream : sig
      specifies the target width used for making line break
      decisions. *)
 
+  val set_width : prettifier -> int -> unit
+  (** [set_width pp n] sets the target width of the streaming pretty
+      printer [pp] to [n].
+
+      FIXME: how is this incorporated into the current decisions? *)
+
+  (**{2 Pretty printing functions} *)
+
   val text : t -> string -> unit
   (** [text pp s] signals to the prettyprinter [pp] to print the text
       [s]. The string [s] should not contain newline characters. If it
