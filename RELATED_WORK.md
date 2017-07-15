@@ -45,6 +45,13 @@
 - http://blog.vjeux.com/2017/javascript/anatomy-of-a-javascript-pretty-printer.html
   How the Javascript `prettier` thing works.
 
+- "Correct-by-Construction Pretty-Printing" by Nils Anders Danielsson.
+  http://www.cse.chalmers.se/~nad/publications/danielsson-correct-pretty.html
+
+- "Format: Add functions for printing conditionally on line breaks"
+  https://github.com/ocaml/ocaml/pull/1229
+  Similar to the 'alignment_spaces' stuff.
+
 ## To be added
 
 - `prettier`
