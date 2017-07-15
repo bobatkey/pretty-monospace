@@ -339,6 +339,12 @@ module Stream : sig
      specifies the target width used for making line break
      decisions. *)
 
+  val stdout : prettifier
+  (** A streaming pretty printer that sends its output to [stdout]. *)
+
+  val stderr : prettifier
+  (** A streaming pretty printer that sends its output to [stderr]. *)
+
   val set_width : prettifier -> int -> unit
   (** [set_width pp n] sets the target width of the streaming pretty
       printer [pp] to [n].

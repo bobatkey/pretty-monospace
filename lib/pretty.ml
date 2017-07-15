@@ -401,6 +401,12 @@ module Stream = struct
     ; indents       = Stack.create ()
     }
 
+  let stdout =
+    create Output.stdout
+
+  let stderr =
+    create Output.stderr
+
   let set_width t new_width =
     t.width <- new_width
 
