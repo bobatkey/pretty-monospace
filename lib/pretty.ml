@@ -462,13 +462,15 @@ module Stream = struct
            (match Stack.pop st.indents with
              | exception Stack.Empty ->
                 failwith "badly nested nests or aligns"
-             | i -> st.indent <- i)
+             | i ->
+                st.indent <- i)
     done
 
   let evict_overflowed_groups st =
     let rec check_closed_groups () =
       match Queue.peek st.closed_groups with
-        | exception Queue.Empty -> ()
+        | exception Queue.Empty ->
+           ()
         | Start_group r when st.pos + r.measure > st.width ->
            ignore (Queue.take st.closed_groups);
            r.measure <- st.width + 1;
@@ -483,8 +485,10 @@ module Stream = struct
            ignore (CCDeque.take_front st.open_groups);
            r.measure <- st.width + 1;
            check_open_groups ()
-        | exception CCDeque.Empty -> ()
-        | _ -> ()
+        | exception CCDeque.Empty ->
+           ()
+        | _ ->
+           ()
     in
     check_open_groups ()
   (* conjecture: all the pruned groups occur in the order they appear
