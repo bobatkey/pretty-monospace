@@ -52,6 +52,9 @@
   https://github.com/ocaml/ocaml/pull/1229
   Similar to the 'alignment_spaces' stuff.
 
+- https://hal.archives-ouvertes.fr/hal-01503081/
+  "Format unraveled" by Richard Bonichon and Pierre Weis
+
 ## To be added
 
 - `prettier`
