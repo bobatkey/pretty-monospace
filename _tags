@@ -1,5 +1,0 @@
-true: safe_string, bin_annot
-
-<lib> : include
-
-<test/*> : package(camlcheck)

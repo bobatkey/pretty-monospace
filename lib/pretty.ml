@@ -92,7 +92,7 @@ module Doc = struct
     (** group a sub-document for deciding whether to break lines or
         not. *)
 
-  let (+/) {break_type;break_dist} bd = match break_type with
+  let (+/) {break_type;break_dist;_} bd = match break_type with
     | `Break   -> break_dist
     | `NoBreak -> break_dist + bd
 
@@ -107,8 +107,8 @@ module Doc = struct
 
   let (^^) doc1 doc2 =
     match doc1, doc2 with
-      | {node=Empty}, _ -> doc2
-      | _, {node=Empty} -> doc1
+      | {node=Empty;_}, _ -> doc2
+      | _, {node=Empty;_} -> doc1
       | doc1, doc2 ->
          { node       = Concat (doc1,doc2)
          ; flat_width = doc1.flat_width + doc2.flat_width
@@ -263,49 +263,49 @@ module Doc = struct
   let fold ~empty ~concat ~text ~break ~alignspaces ~nest ~align ~group doc =
     (* FIXME: tail recursive using an explicit stack? *)
     let rec fold break_distance = function
-      | { node = Empty } ->
+      | { node = Empty; _ } ->
          empty
-      | { node = Concat (d1, d2) } ->
+      | { node = Concat (d1, d2); _ } ->
          concat (fold (d2 +/ break_distance) d1) (fold break_distance d2)
-      | { node = Text s } ->
+      | { node = Text s; _ } ->
          text s
-      | { node = Break s } ->
+      | { node = Break s; _ } ->
          break s
-      | { node = AlignSpaces n } ->
+      | { node = AlignSpaces n; _ } ->
          alignspaces n
-      | { node = Nest (i, d) } ->
+      | { node = Nest (i, d); _ } ->
          nest i (fold break_distance d)
-      | { node = Align d } ->
+      | { node = Align d; _ } ->
          align (fold break_distance d)
-      | { node = Group d; flat_width } ->
+      | { node = Group d; flat_width; _ } ->
          group (flat_width + break_distance) (fold break_distance d)
     in
     fold 0 doc
 
   let format out ?(width=80) doc =
     let open Output in
-    let rec flat = function
-      | {node=Empty | AlignSpaces _}          -> ()
-      | {node=Concat (x,y)}                   -> flat x; flat y
-      | {node=Text s | Break s}               -> out.text s
-      | {node=Align x | Nest (_,x) | Group x} -> flat x
+    let rec flat doc = match doc.node with
+      | Empty | AlignSpaces _          -> ()
+      | Concat (x,y)                   -> flat x; flat y
+      | Text s | Break s               -> out.text s
+      | Align x | Nest (_,x) | Group x -> flat x
     in
     let rec process column bd i = function
-      | {node=Empty} -> column
-      | {node=Concat (x,y)} ->
+      | {node=Empty; _} -> column
+      | {node=Concat (x,y); _} ->
          let column = process column (y +/ bd) i x in
          process column bd i y
-      | {node=Text s} ->
+      | {node=Text s; _} ->
          out.text s; column + String.length s
-      | {node=AlignSpaces n} ->
+      | {node=AlignSpaces n; _} ->
          out.spaces n; column + n
-      | {node=Align x} ->
+      | {node=Align x; _} ->
          process column bd column x
-      | {node=Nest (j, x)} ->
+      | {node=Nest (j, x); _} ->
          process column bd (i+j) x
-      | {node=Break _} ->
+      | {node=Break _; _} ->
          out.newline (); out.spaces i; i
-      | {node=Group x; flat_width} ->
+      | {node=Group x; flat_width; _} ->
          if width - column - flat_width >= bd then
            (flat x;
             column + flat_width)
@@ -365,20 +365,20 @@ end = struct
   let create () =
     { front = None; back = None }
 
-  let peek_front {front} =
-    match front with
+  let peek_front queue =
+    match queue.front with
       | None -> raise Empty
-      | Some {data} -> data
+      | Some {data; _} -> data
 
   let take_front deque =
     match deque.front with
       | None ->
          raise Empty
-      | Some {prev=None;data} ->
+      | Some {prev=None;data;_} ->
          deque.front <- None;
          deque.back <- None;
          data
-      | Some {prev=Some node as prev;data} ->
+      | Some {prev=Some node as prev;data;_} ->
          node.next <- None;
          deque.front <- prev;
          data
@@ -395,11 +395,11 @@ end = struct
     match deque.back with
       | None ->
          raise Empty
-      | Some {next=None;data} ->
+      | Some {next=None;data;_} ->
          deque.front <- None;
          deque.back <- None;
          data
-      | Some {next=Some node as next;data} ->
+      | Some {next=Some node as next;data;_} ->
          node.prev <- None;
          deque.back <- next;
          data
