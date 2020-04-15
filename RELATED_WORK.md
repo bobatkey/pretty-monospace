@@ -55,6 +55,8 @@
 - https://hal.archives-ouvertes.fr/hal-01503081/
   "Format unraveled" by Richard Bonichon and Pierre Weis
 
+- https://github.com/ocaml-dune/pp A functional frontend to the OCaml `Format` module, similar to the `Fmt` module. Extracted from Dune.
+
 ## To be added
 
 - `prettier`
