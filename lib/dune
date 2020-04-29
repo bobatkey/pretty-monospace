@@ -1,2 +1,3 @@
 (library
- (name pretty))
+ (name        pretty)
+ (public_name pretty-monospace))
